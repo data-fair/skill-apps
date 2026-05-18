@@ -119,6 +119,7 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 | `snippets/theme-setup.ts` | Configuration session + Vuetify avec thème dynamique |
 | `snippets/error-handling.ts` | Gestion d'erreurs API (snackbar + `useFetch` / `useAsyncAction`) |
 | `snippets/ui-notif.ts` | Notifications globales avec `createUiNotif` / `useUiNotif` (API correcte) |
+| `snippets/hot-reload.ts` | Rendre la config réactive en mode draft (df:sync-config="true") |
 | `snippets/draft-qs-filter.ts` | Synchroniser `staticFilters` / `qsFilter` vers DataFair en mode draft |
 | `snippets/d-frame.ts` | Intégration d'autres vues DataFair via d-frame |
 | `snippets/schema-tabs.ts` | Organisation par onglets (`allOf` + `title`) |
@@ -319,6 +320,11 @@ Pattern recommandé pour des sous-formulaires conditionnels (ex: choisir un type
   - **Pattern recommandé** : importer le singleton global (`@data-fair/lib-vue/reactive-search-params-global.js`) — aucun plugin nécessaire.
   - Les helpers `useStringSearchParam`, `useBooleanSearchParam`, etc. nécessitent le plugin `createReactiveSearchParams()`, réservé aux cas avancés ou au SSR.
 - **Config en draft** : mise à jour en temps réel via `postMessage` (`type: 'set-config'`).
+  - Activer `<meta name="df:sync-config" content="true">` dans `index.html`.
+  - **Règle d'or** : ne jamais lire `window.APPLICATION.configuration` en top-level de module (ex: `const config = window.APPLICATION.configuration`). Cela fige la config au chargement et casse le hot reload. Toujours passer par `useConfig()`.
+  - Les `computed` qui dépendent de `config.value` se mettent à jour automatiquement.
+  - Les `useFetch` avec URLs/query params en `computed` se réexécutent automatiquement quand la config change.
+  - Pour les structures dynamiques complexes (tableaux de filtres avec `useFetch` internes), utiliser `effectScope` pour recréer proprement les ressources réactives et éviter les fuites. Voir `snippets/hot-reload.ts`.
 - **État dans l'URL** : filtres, tri, métrique sélectionnée reflétés dans l'URL pour le partage.
 - **Thème dynamique** : sombre/clair fonctionne via `vuetifySessionOptions(session)`.
 
