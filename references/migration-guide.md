@@ -1,5 +1,129 @@
 # Guide de migration
 
+## Pré-audit : migrer ou réécrire ?
+
+Avant de démarrer, évaluez la complexité de l'app legacy :
+
+| Critère | Facilement migrable | Legacy à réécrire |
+|---------|---------------------|-------------------|
+| Structure | `pages/`, `components/`, `store/` classiques | Logique métier dans `plugins/`, modules Nuxt custom, middlewares complexes |
+| État global | `Vuex` simple (quelques modules) | `Vuex` avec actions async imbriquées, plugins perso |
+| HTTP | `this.$axios` encapsulé dans des services | Appels axios dispersés dans tous les composants |
+| UI | Vuetify 2 standard, peu de custom CSS | Thème lourd, composants Vuetify surchargés, CSS global massif |
+| Données | Quelques datasets DataFair | Intégrations multiples, données locales, offline |
+
+**Règle empirique** : si l'app fait > 20 pages, utilise des modules Nuxt custom ou du SSR complexe, envisagez une réécriture progressive par feature plutôt qu'une migration globale.
+
+---
+
+## Migration depuis Nuxt 2 / Vue CLI
+
+### Structure de dossiers
+
+| Ancien (Nuxt 2 / Vue CLI) | Nouveau (Vite) |
+|---------------------------|----------------|
+| `pages/` | `src/App.vue` + `src/components/` + router si besoin |
+| `store/` | `src/composables/` (remplace Vuex) |
+| `static/` | `public/` |
+| `assets/` | `src/assets/` ou `src/styles/` |
+| `plugins/` | `src/main.ts` (bootstrap) ou `src/composables/` |
+| `app.html` / `public/index.html` | `index.html` (racine) avec `%APPLICATION%` |
+
+### Fichier d'entrée
+
+Remplacer `app.html` (Nuxt) ou `public/index.html` (Vue CLI) par un `index.html` à la racine :
+
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="application-name" content="Mon App">
+  <meta name="df:filter-concepts" content="true">
+  <title>Mon App</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
+```
+
+**Important** : DataFair injecte `%APPLICATION%` dans le `<head>` au runtime. Ne pas oublier le placeholder si vous aviez une logique custom dans `app.html`.
+
+### État global (Vuex → Composables)
+
+Remplacer les modules Vuex par des composables simples :
+
+```ts
+// Avant (store/datasets.js)
+export const state = () => ({ list: [] })
+export const mutations = { SET_LIST(state, list) { state.list = list } }
+export const actions = { async fetchList({ commit }) { ... } }
+
+// Après (src/composables/useDatasets.ts)
+import { ref } from 'vue'
+import { useFetch } from '@data-fair/lib-vue/fetch.js'
+
+const list = ref([])
+const loading = ref(false)
+
+export function useDatasets() {
+  const fetchList = async () => {
+    const { data, loading: l } = useFetch('/api/v1/datasets')
+    loading.value = l.value
+    list.value = data.value || []
+  }
+  return { list, loading, fetchList }
+}
+```
+
+### HTTP (this.$axios → useFetch)
+
+```ts
+// Avant
+this.$axios.get('/api/v1/datasets/123/lines')
+
+// Après
+import { useFetch } from '@data-fair/lib-vue/fetch.js'
+const { data, loading, error } = useFetch('/api/v1/datasets/123/lines')
+```
+
+Voir la section dédiée "HTTP" plus bas pour les détails sur `useFetch`.
+
+### Vuetify (@nuxtjs/vuetify → vite-plugin-vuetify)
+
+1. Désinstaller : `npm uninstall @nuxtjs/vuetify`
+2. Installer : `npm install vuetify@^4.0.0 vite-plugin-vuetify@^2.0.0`
+3. Créer `src/styles/settings.scss` :
+
+```scss
+@use 'vuetify/settings' with (
+  $color-pack: false
+);
+```
+
+4. Créer `vite.config.mjs` :
+
+```js
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vuetify from 'vite-plugin-vuetify'
+
+export default defineConfig({
+  plugins: [
+    vue(),
+    vuetify({ autoImport: true, styles: { configFile: 'src/styles/settings.scss' } })
+  ],
+  server: { port: 3000 }
+})
+```
+
+5. Adapter les composants Vuetify (voir section Vuetify 2 → 4 ci-dessous).
+
+---
+
 ## Vue 2 → Vue 3
 
 | Vue 2 | Vue 3 |
@@ -35,7 +159,31 @@
 
 - Remplacer `axios` par `useFetch` de `@data-fair/lib-vue/fetch.js`
 - `useFetch` gère la réactivité, le loading, l'annulation et les notifications
-- `ofetch` direct uniquement pour des cas particuliers (download fichiers)
+- `ofetch` direct est **réservé aux cas particuliers** (blob, download, upload). **Tout le reste doit passer par `useFetch`.**
+
+Exemple de migration `ofetch` → `useFetch` :
+
+```ts
+// AVANT (ofetch direct) — ANTI-PATTERN
+const lines = ref([])
+const loading = ref(false)
+const error = ref(null)
+const fetchLines = async () => {
+  loading.value = true
+  try {
+    lines.value = await $fetch('/api/v1/datasets/123/lines')
+  } catch (e) {
+    error.value = e
+  } finally {
+    loading.value = false
+  }
+}
+
+// APRÈS (useFetch) — PATTERN CORRECT
+import { useFetch } from '@data-fair/lib-vue/fetch.js'
+const { data: lines, loading, error } = useFetch('/api/v1/datasets/123/lines')
+// loading et error sont des refs utilisables directement dans le template
+```
 
 ## Notifications
 
@@ -47,6 +195,39 @@
 - Remplacer le lecteur manuel de `window.APPLICATION` par le plugin `createConfig` standard (voir `snippets/create-config.ts`)
 - Installer `createReactiveSearchParams` pour la gestion des query params
 - Installer `createUiNotif` pour les notifications
+  - `useUiNotif()` expose `{ notification, sendUiNotif }` (attention : pas `sendNotif` ni `notif`)
+- Corriger le meta tag `df:concept-filters` en `df:filter-concepts` dans `index.html` si présent (DataFair reconnaît uniquement `df:filter-concepts`)
+
+## v-iframe → d-frame
+
+Remplacer `@koumoul/v-iframe` et `window.vIframeOptions` par `@data-fair/frame` avec `createDFrameAdapter`.
+
+```ts
+// AVANT (v-iframe — OBSOLÈTE)
+window.vIframeOptions = {
+  reactiveParams: reactiveSearchParams
+}
+
+// APRÈS (d-frame)
+import createDFrameAdapter from '@data-fair/frame/lib/vue-reactive/state-change-adapter.js'
+import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
+
+const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
+```
+
+Dans le template, remplacer `<v-iframe>` par `<d-frame>` avec l'adapter et l'accessKey :
+
+```vue
+<template>
+  <d-frame
+    :src="`/embed/dataset/${datasetId}/table`"
+    :adapter="dFrameAdapter"
+    :access-key="accessKey"
+  />
+</template>
+```
+
+> `@data-fair/frame` conserve un mode compat qui lit encore `window.vIframeOptions` pour faciliter la transition, mais ce mode est destiné à disparaître.
 
 ## Checklist de migration
 

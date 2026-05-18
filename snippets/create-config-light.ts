@@ -1,5 +1,9 @@
-import { computed, inject, provide, ref, type App, type Ref } from 'vue'
-import type { Application, Dataset, Field } from '@data-fair/lib-common-types'
+import { inject, computed, ref, type App, type Ref } from 'vue'
+import type { Application, Dataset, Field } from '@data-fair/lib-common-types/application/index.js'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createConfig simplifié — pour visus mono-dataset sans embed d-frame
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface ConfigState {
   application: Application
@@ -7,22 +11,17 @@ export interface ConfigState {
   setConfig: (newConfig: any) => void
   notifyConfigChange: (field: string, value: unknown) => void
   dataset: Ref<Dataset | undefined>
-  datasets: Ref<Dataset[]>
   fields: Ref<Record<string, Field>>
   datasetUrl: Ref<string | undefined>
   finalizedAt: Ref<string | undefined>
-  accessKey: Ref<string | null>
   error: Ref<string | null>
 }
 
 export function createConfig () {
-  const application = window.APPLICATION as Application & { href: string; apiUrl: string; wsUrl: string }
+  const application = window.APPLICATION as Application & { href: string }
   const config = ref<any>(application?.configuration || {})
 
-  // Dataset principal (visus simples)
   const dataset = computed(() => config.value?.datasets?.[0] as Dataset | undefined)
-  // Tous les datasets (visus multi-datasets comme atelier-carto ou data-fair-metrics)
-  const datasets = computed(() => config.value?.datasets || [])
 
   const fields = computed(() => {
     const schema = dataset.value?.schema || []
@@ -34,11 +33,6 @@ export function createConfig () {
 
   const datasetUrl = computed(() => dataset.value?.href)
   const finalizedAt = computed(() => dataset.value?.finalizedAt)
-
-  // AccessKey pour les liens partagés (propagation des droits aux embeds)
-  const last = window.APPLICATION?.exposedUrl?.split('/').pop()
-  const toks = last?.split('%3A')
-  const accessKey = ref<string | null>((toks?.length === 2) ? toks[0] : null)
 
   const error = computed(() => {
     if (!config.value) return 'Il n\'y a pas de configuration définie'
@@ -82,11 +76,9 @@ export function createConfig () {
         setConfig,
         notifyConfigChange,
         dataset,
-        datasets,
         fields,
         datasetUrl,
         finalizedAt,
-        accessKey,
         error
       })
 
@@ -94,13 +86,10 @@ export function createConfig () {
         if (event.data?.type === 'set-config' && event.data?.content) {
           const { content } = event.data
           if (content.configuration) {
-            // DataFair envoie la config complète
             config.value = content.configuration
           } else if (content.chart || content.datasets || content.layers || content.metrics) {
-            // DataFair envoie parfois la config directement dans content
             config.value = content
           } else if (content.field && 'value' in content) {
-            // Update par path (ex: 'chart.colors.0')
             const newConfig = JSON.parse(JSON.stringify(config.value))
             setByPath(newConfig, content.field, content.value)
             config.value = newConfig
