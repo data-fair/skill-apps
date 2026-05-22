@@ -36,8 +36,9 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
   "dev-server": "APP_URL=http://localhost:3000/app/ df-dev-server",
   "dev-app": "vite",
   "build": "vite build",
-  "lint": "eslint . --fix --ignore-path .gitignore",
-  "type-check": "vue-tsc --noEmit"
+  "lint": "eslint . --fix",
+  "type-check": "vue-tsc --noEmit",
+  "build-types": "df-build-types"
 }
 ```
 
@@ -99,6 +100,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 <meta name="description" content="...">
 <meta name="thumbnail" content="%PUBLIC_URL%/thumbnail.png">
 <meta name="df:filter-concepts" content="true">
+<meta name="df:sync-config" content="true">
 ```
 
 > **Note sur les filtres par concepts** : le nom canonique reconnu par DataFair est `df:filter-concepts`. Certaines apps récentes utilisent à tort `df:concept-filters` (erreur historique de documentation). Pour les **nouveaux projets**, utilisez impérativement `df:filter-concepts`. Lors d'une migration ou maintenance d'app legacy, corrigez `df:concept-filters` en `df:filter-concepts`.
@@ -330,11 +332,12 @@ Pattern recommandé pour des sous-formulaires conditionnels (ex: choisir un type
 
 ### HTTP
 
-- **Toujours utiliser `useFetch`** de `@data-fair/lib-vue/fetch.js` (wrapper réactif autour de `ofetch`).
-- `ofetch` direct est **réservé aux cas particuliers** (blob, download, upload). **Tout le reste doit passer par `useFetch`.**
+- **Toujours utiliser `useFetch`** de `@data-fair/lib-vue/fetch.js` (wrapper réactif autour de `ofetch`) pour les **lectures** de données (GET).
+- `ofetch` direct est toléré pour les **mutations** (POST, PUT, PATCH, DELETE) lorsqu'elles sont encapsulées dans **`useAsyncAction`** (loading, erreur et notification gérés par le composable).
+- `ofetch` direct est aussi réservé aux cas très particuliers (blob, download, upload).
 - **Jamais `fetch` natif**, jamais `axios`.
 
-**Pourquoi `useFetch` est obligatoire** :
+**Pourquoi `useFetch` est obligatoire pour les lectures** :
 - **Réactivité** : `data`, `loading`, `error` sont des `ref()` exploitables directement dans le template
 - **Annulation automatique** : les requêtes obsolètes sont annulées via AbortController (évite les race conditions)
 - **Typage** : typage TypeScript natif du retour
