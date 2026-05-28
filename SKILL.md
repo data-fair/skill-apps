@@ -120,7 +120,7 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 | `snippets/locale-dayjs.ts` | Synchronisation locale dayjs avec la session |
 | `snippets/theme-setup.ts` | Configuration session + Vuetify avec thème dynamique |
 | `snippets/error-handling.ts` | Gestion d'erreurs API (snackbar + `useFetch` / `useAsyncAction`) |
-| `snippets/ui-notif.ts` | Notifications globales avec `createUiNotif` / `useUiNotif` (API correcte) |
+| `snippets/ui-notif.ts` | Notifications globales avec `<DfUiNotif />` de `@data-fair/lib-vuetify` + `createUiNotif` / `useUiNotif` |
 | `snippets/hot-reload.ts` | Rendre la config réactive en mode draft (df:sync-config="true") |
 | `snippets/draft-qs-filter.ts` | Synchroniser `staticFilters` / `qsFilter` vers DataFair en mode draft |
 | `snippets/d-frame.ts` | Intégration d'autres vues DataFair via d-frame |
@@ -366,6 +366,8 @@ const { data: lines, loading, error } = useFetch('/api/v1/datasets/123/lines')
 // loading et error sont utilisables directement dans le template
 ```
 
+**Utilitaires d'erreur** — `@data-fair/lib-vue/ui-notif.js` expose `getErrorMsg(error)` et `getErrorCode(error)` pour extraire proprement le message et le code HTTP d'une erreur API (compatible `ofetch`, `axios`, `fetch` natif).
+
 ### Performances
 
 - Débouncer les appels API (`useDebounce` de `@vueuse/core`).
@@ -395,6 +397,11 @@ const baseParams = useDebounce(
 - Gérer l'état de chargement (`loading` de `useFetch` ou `useAsyncAction`).
 - Gérer l'état d'erreur (snackbar ou `v-empty-state`).
 - Afficher un `v-empty-state` si la configuration est incomplète ou invalide.
+
+> **Composants `@data-fair/lib-vuetify` complémentaires** :
+> - `layout-fetch-error.vue` — page d'erreur complète (404/403/500, SVG thémés, i18n, bouton retour, switch org).
+> - `layout-empty-state.vue` — empty state avec icône, texte i18n et bouton d'action optionnel.
+> Ces composants sont disponibles dans `@data-fair/lib-vuetify` et peuvent être utilisés dans les apps métier ou visus complexes.
 
 ## Intégration iframe / d-frame
 

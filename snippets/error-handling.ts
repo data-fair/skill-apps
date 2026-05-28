@@ -1,20 +1,21 @@
 import { useFetch } from '@data-fair/lib-vue/fetch.js'
+import { getErrorMsg } from '@data-fair/lib-vue/ui-notif.js'
 import { computed } from 'vue'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Gestion d'erreurs API dans une visu DataFair
 // ─────────────────────────────────────────────────────────────────────────────
 
-// useFetch expose natively : data, loading, error (readonly FetchError | null)
+// useFetch expose nativement : data, loading, error (readonly FetchError | null)
 const { data, loading, error } = useFetch(
   computed(() => datasetUrl.value + '/lines'),
   {
     query: computed(() => ({ size: 100, finalizedAt: finalizedAt.value })),
-    notifError: false // on gère l'affichage manuellement (snackbar)
+    notifError: false // on gère l'affichage manuellement
   }
 )
 
-// Booléen réactif pour la visibilité du snackbar
+// Booléen réactif pour la visibilité d'une alerte locale
 const showError = computed(() => !!error.value)
 
 // Dans le template :
@@ -34,10 +35,13 @@ const showError = computed(() => !!error.value)
 //       title="Le dataset est vide ou les filtres sont trop restrictifs."
 //     />
 //
-//     <!-- Erreur API affichée dans un snackbar -->
-//     <v-snackbar v-model="showError" color="red" :timeout="5000">
-//       {{ error?.statusCode }} — {{ error?.message }}
-//     </v-snackbar>
+//     <!-- Erreur API affichée localement avec getErrorMsg -->
+//     <v-alert v-if="showError" type="error" variant="tonal">
+//       {{ getErrorMsg(error) }}
+//     </v-alert>
+//
+//     <!-- OU snackbar global géré automatiquement par <DfUiNotif /> -->
+//     <!-- (pas besoin de v-snackbar manuel, voir snippets/ui-notif.ts) -->
 //   </div>
 // </template>
 
@@ -70,9 +74,13 @@ import { useUiNotif } from '@data-fair/lib-vue/ui-notif.js'
 //   - notification  → shallowRef(null)
 //   - sendUiNotif   → fonction d'envoi
 
-const { notification, sendUiNotif } = useUiNotif()
+const { sendUiNotif } = useUiNotif()
 
 // Envoyer une erreur manuellement :
 sendUiNotif({ type: 'error', msg: 'Erreur de chargement' })
 
-// Afficher dans un snackbar global (voir snippets/ui-notif.ts)
+// Utiliser getErrorMsg pour formater proprement une erreur API :
+// sendUiNotif({ type: 'error', msg: getErrorMsg(err), error: err })
+
+// Pour afficher dans un snackbar global : installer <DfUiNotif /> dans App.vue
+// (voir snippets/ui-notif.ts)
