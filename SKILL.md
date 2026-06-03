@@ -38,7 +38,7 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
   "build": "vite build",
   "lint": "eslint . --fix",
   "type-check": "vue-tsc --noEmit",
-  "build-types": "df-build-types"
+  "build-types": "df-build-types && cp src/config/.type/resolved-schema.json public/config-schema.json"
 }
 ```
 
@@ -168,6 +168,8 @@ my-visu/
 
 DataFair utilise [VJSF](https://koumoul-dev.github.io/vuetify-jsonschema-form/) v3 pour générer le formulaire de configuration à partir du fichier `public/config-schema.json`. Le fichier source est `src/config/schema.json` et il est traité par `df-build-types` pour générer à la fois les types TypeScript et le schéma résolu copié dans `public/`.
 
+> **Note** : `df-build-types` est fourni par le package **`@data-fair/lib-types-builder`** (à installer en `devDependencies`).
+
 ### Pipeline de build
 
 ```
@@ -178,6 +180,13 @@ src/config/schema.json          → édité à la main
 src/config/.type/               → généré automatiquement
   ├── index.d.ts                → types TS (importés dans le code)
   └── resolved-schema.json      → copié vers public/config-schema.json
+```
+
+**Script** (dans `package.json`) :
+```json
+{
+  "build-types": "df-build-types && cp src/config/.type/resolved-schema.json public/config-schema.json"
+}
 ```
 
 **Commande** : `npm run build-types` (doit être relancée après chaque modification de `schema.json`).

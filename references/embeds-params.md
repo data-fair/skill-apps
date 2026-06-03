@@ -12,14 +12,14 @@ Affiche les lignes d'un jeu de données sous forme de tableau, liste ou cartes.
 | `cols` | Colonnes affichées (séparées par virgule, ex: `nom,valeur,date`) |
 | `display` | Mode d'affichage : `list`, `table` ou `cards` |
 | `q` | Recherche textuelle fulltext pré-remplie |
-| `sort` | Tri (`field:1` pour asc, `field:-1` pour desc) |
+| `sort` | Tri (préfixer la colonne avec `-` pour descendant, ex: `-valeur`) |
 | `fixed` | Liste des colonnes fixes (non déplaçables) |
 | `interaction` | Active les interactions (clic sur ligne, etc.) |
 | `selectable` | Active la sélection de lignes |
 | `_id_eq` | Filtre sur un ID spécifique |
 | `*_eq` / `*_in` | Filtres dynamiques de contexte |
 
-**Exemple** : `/embed/dataset/{id}/table?cols=nom,valeur&sort=valeur:-1&q=paris&departement_eq=75`
+**Exemple** : `/embed/dataset/{id}/table?cols=nom,valeur&sort=-valeur&q=paris&departement_eq=75`
 
 ---
 

@@ -9,7 +9,7 @@ Pour les visus affichant des lignes individuelles : tableaux, listes, cartes ave
 **Paramètres** :
 - `size` : nombre de résultats (max 10000)
 - `q` : recherche textuelle fulltext
-- `sort` : tri (`field:-1` pour desc, `field:1` pour asc)
+- `sort` : tri, liste de noms de colonnes séparés par virgules. Ascendant par défaut, préfixer par `-` pour descendant. Ex : `ma_colonne,-ma_colonne2`.
 - `*_eq` / `*_in` : filtres sur les champs (ex: `departement_eq=75`)
 - `select` : champs à retourner (séparés par virgule)
 - `finalizedAt` : timestamp pour le cache
@@ -21,7 +21,7 @@ useFetch(
   {
     query: computed(() => ({
       size: 100,
-      sort: 'date:-1',
+      sort: '-date',
       departement_eq: selectedDept.value,
       select: 'nom,valeur,date'
     }))
@@ -38,7 +38,7 @@ Pour obtenir les valeurs distinctes d'un champ avec leurs labels (traductions, �
 **Paramètres** :
 - `field` : champ cible (obligatoire)
 - `size` : nombre maximum de valeurs (max 1000)
-- `sort` : tri (`count:-1` ou `field:1`)
+- `sort` : tri, valeur simple `asc` ou `desc` (défaut `asc`). Ex : `sort: 'desc'`.
 - `*_eq` / `*_in` : filtres préalables
 - `missing` : label pour les valeurs nulles
 
@@ -63,7 +63,7 @@ const { data } = useFetch(
     query: {
       field: 'region',
       size: 100,
-      sort: 'count:-1'
+      sort: 'desc'
     }
   }
 )
@@ -82,7 +82,7 @@ Pour les graphiques avec regroupement : bar charts, pie charts, line charts, tre
 - `metricField` : champ sur lequel calculer la métrique (si `metric` ≠ `count`)
 - `size` : nombre de groupes (max 1000)
 - `*_eq` / `*_in` : filtres préalables
-- `sort` : tri des résultats (`metric:-1` ou `field:1`)
+- `sort` : tri des résultats, liste de tokens séparés par virgules parmi `metric`, `-metric`, `count`, `-count`, `key`, `-key`, ou nom de colonne (préfixé `-` pour desc). Ex : `sort: '-metric'`, `sort: 'key'`, `sort: '-count,key'`.
 - `percents` : `true` pour inclure les pourcentages
 - `missing` : label pour les valeurs nulles (ex: `Non renseigné`)
 
@@ -99,7 +99,7 @@ useFetch(
       metricField: 'montant',
       annee_eq: selectedYear.value,
       size: 20,
-      sort: 'metric:-1'
+      sort: '-metric'
     }))
   }
 )
@@ -130,7 +130,7 @@ useFetch(
       metricField: 'valeur',
       region_eq: selectedRegion.value,
       size: 100,
-      sort: 'field:1'
+      sort: 'key'
     }))
   }
 )
