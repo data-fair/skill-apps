@@ -1,3 +1,7 @@
+// Synchronisation des params entre l'app et les embeds d-frame.
+// Voir SKILL.md > "Intégration iframe / d-frame" pour le modèle mental parent/enfant
+// et references/embeds-params.md pour les conventions d'émission par type d'embed.
+
 import createDFrameAdapter from '@data-fair/frame/lib/vue-reactive/state-change-adapter.js'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 

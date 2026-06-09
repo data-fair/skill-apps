@@ -414,6 +414,19 @@ const baseParams = useDebounce(
 
 ## Intégration iframe / d-frame
 
+### Modèle mental : parent vs enfant
+
+Quand vous intégrez une vue DataFair via `<d-frame>`, deux espaces de paramètres URL coexistent :
+
+| Espace | Clés typiques | Préfixage |
+|---|---|---|
+| Parent (notre app) | `_d_{datasetId}__id_eq`, `_d_{datasetId}__c_*` | Préfixé par l'id du dataset pour les apps data-fair |
+| Enfant (iframe) | `_id_eq`, `_c_*`, `_d_*` | Conventions REST data-fair natives |
+
+L'attribut `sync-params` du `<d-frame>` traduit les clés du parent vers l'enfant. Une règle `enfantKey:parentPrefix_` fait la **substitution** : `_d_{id}_id_eq` côté parent → `_id_eq` côté enfant. Une règle sans `:parentPrefix_` est une **identité** (la clé passe inchangée).
+
+**Conséquence** : votre code n'a besoin de connaître que la convention **parent**. C'est `:sync-params` qui adapte ce qui est passé à l'enfant. Voir `references/embeds-params.md` pour le détail par type d'embed.
+
 ### Paramètres réactifs
 
 Utiliser `createDFrameAdapter` de `@data-fair/frame` pour synchroniser les paramètres de recherche entre l'app parent et les embeds `d-frame` :

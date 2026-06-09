@@ -111,3 +111,28 @@ Formulaire de configuration d'une autre application DataFair (utilisé dans les 
 - Le paramètre `q` permet de pré-remplir une recherche textuelle dans l'embed.
 - L'**accessKey** doit être propagée aux embeds via l'attribut `:access-key` du composant `d-frame` pour maintenir les droits d'accès sur les données.
 - Les filtres de contexte (`*_eq`, `*_in`) sont cumulatifs : plusieurs filtres peuvent être combinés pour restreindre les données.
+
+## Conventions d'émission par type d'embed
+
+Les embeds ci-dessus émettent leur sélection dans l'URL **parente** selon deux conventions :
+
+| Type d'embed | Émet côté parent | `:sync-params` suggéré |
+|---|---|---|
+| Table embed (`/embed/dataset/{id}/table`, `display=table|list`) | `_id_eq` | `_id_eq:_d_{id}_,_c_*,_d_*` |
+| Carte embed (`/embed/dataset/{id}/map`) | `_id_eq` | `_id_eq:_d_{id}_,_c_*,_d_*` |
+| App data-fair (`/app/{appId}`) | `_d_{id}__id_eq` | `_d_{id}__id_eq:_d_{id}__id_eq,_c_*,_d_*` |
+
+Quand votre app supporte plusieurs types d'embed selon la configuration, calculez `:sync-params` dynamiquement :
+
+```vue
+<d-frame
+  :src="iframeSrc"
+  :sync-params="
+    config.display?.type === 'tablePreview'
+      ? `_id_eq:_d_${mainDataset.id}_,_c_*,_d_*`
+      : `_d_${mainDataset.id}__id_eq:_d_${mainDataset.id}__id_eq,_c_*,_d_*`
+  "
+/>
+```
+
+**Règle générale** : votre code lit/écrit dans `reactiveSearchParams` avec la convention **parent**. C'est `:sync-params` qui adapte ce qui est passé à l'enfant. Ne dupliquez pas la logique de préfixage côté composant.
