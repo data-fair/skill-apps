@@ -200,15 +200,28 @@ const { data: lines, loading, error } = useFetch('/api/v1/datasets/123/lines')
 
 ## v-iframe → d-frame
 
-Remplacer `@koumoul/v-iframe` et `window.vIframeOptions` par `@data-fair/frame` avec `createDFrameAdapter`.
+`@data-fair/frame` apporte deux mécanismes **complémentaires** qui remplacent `@koumoul/v-iframe` :
+
+| Mécanisme | Rôle |
+|---|---|
+| `createDFrameAdapter` (`:adapter` sur `<d-frame>`) | L'app **embarque** d'autres vues (côté parent) |
+| `window.vIframeOptions = { reactiveParams }` | L'app est **embarquée** dans un d-frame externe (côté enfant) |
+
+Lors d'une migration, **conserver les deux** :
 
 ```ts
-// AVANT (v-iframe — OBSOLÈTE)
-window.vIframeOptions = {
-  reactiveParams: reactiveSearchParams
-}
+// src/main.ts — niveau module, AVANT createApp()
+// Côté enfant : évite le rechargement complet quand l'app est embedded
+// dans un d-frame parent (portail, dashboard, autre app).
+// Sans ce bloc, le shim v-iframe-compat injecté par DataFair tombe dans
+// son fallback window.location.href = src → rechargement → clignotement.
+import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
+;(window as any).vIframeOptions = { reactiveParams: reactiveSearchParams }
+```
 
-// APRÈS (d-frame)
+```ts
+// src/composables/config.ts — côté parent
+// Synchronise les params entre l'app et les d-frames qu'elle embarque.
 import createDFrameAdapter from '@data-fair/frame/lib/vue-reactive/state-change-adapter.js'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 
@@ -227,7 +240,7 @@ Dans le template, remplacer `<v-iframe>` par `<d-frame>` avec l'adapter et l'acc
 </template>
 ```
 
-> `@data-fair/frame` conserve un mode compat qui lit encore `window.vIframeOptions` pour faciliter la transition, mais ce mode est destiné à disparaître.
+> **Ne pas supprimer `window.vIframeOptions`** lors d'une migration. Il n'est pas remplacé par `createDFrameAdapter` : les deux traitent des sens de synchronisation différents (parent → enfant vs enfant → parent). Le mode compat du shim est maintenu tant que le shim `v-iframe-compat/d-frame-content.js` est injecté par DataFair.
 
 ## Checklist de migration
 

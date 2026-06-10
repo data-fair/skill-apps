@@ -1,12 +1,23 @@
 // Synchronisation des params entre l'app et les embeds d-frame.
 // Voir SKILL.md > "Intégration iframe / d-frame" pour le modèle mental parent/enfant
 // et references/embeds-params.md pour les conventions d'émission par type d'embed.
+//
+// Deux mécanismes complémentaires, à utiliser ensemble :
+//   - createDFrameAdapter (ci-dessous) : côté parent, l'app EMBARQUE des d-frames
+//   - window.vIframeOptions : côté enfant, l'app est EMBARQUÉE dans un d-frame
+//     (portail, dashboard, autre app). Voir snippets/main.ts pour le setup.
 
 import createDFrameAdapter from '@data-fair/frame/lib/vue-reactive/state-change-adapter.js'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 
-// Créer l'adapter pour synchroniser les params entre l'app et les embeds
+// Côté parent : créer l'adapter pour synchroniser les params entre l'app
+// et les embeds d-frame qu'elle embarque.
 const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
+
+// Côté enfant : exposer reactiveSearchParams au shim v-iframe-compat injecté
+// par DataFair. À mettre dans src/main.ts au niveau module, avant createApp().
+// (voir snippets/main.ts)
+;(window as any).vIframeOptions = { reactiveParams: reactiveSearchParams }
 
 // Dans le composable config, exposer dFrameAdapter et accessKey
 // Dans le composant, utiliser d-frame avec l'adapter et l'accessKey

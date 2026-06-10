@@ -123,7 +123,7 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 | `snippets/ui-notif.ts` | Notifications globales avec `<DfUiNotif />` de `@data-fair/lib-vuetify` + `createUiNotif` / `useUiNotif` |
 | `snippets/hot-reload.ts` | Rendre la config réactive en mode draft (df:sync-config="true") |
 | `snippets/draft-qs-filter.ts` | Synchroniser `staticFilters` / `qsFilter` vers DataFair en mode draft |
-| `snippets/d-frame.ts` | Intégration d'autres vues DataFair via d-frame |
+| `snippets/d-frame.ts` | Intégration d'autres vues DataFair via d-frame (côté parent + côté enfant) |
 | `snippets/schema-tabs.ts` | Organisation par onglets (`allOf` + `title`) |
 | `snippets/schema-discriminator.ts` | Discrimination de type (`discriminator` + `oneOf` + `const`) |
 | `snippets/schema-getitems.ts` | Sélecteurs dynamiques peuplés par API (`layout.getItems` avec `url`) |
@@ -429,16 +429,58 @@ L'attribut `sync-params` du `<d-frame>` traduit les clés du parent vers l'enfan
 
 ### Paramètres réactifs
 
-Utiliser `createDFrameAdapter` de `@data-fair/frame` pour synchroniser les paramètres de recherche entre l'app parent et les embeds `d-frame` :
+Deux mécanismes complémentaires, **à utiliser ensemble** :
+
+| Mécanisme | Rôle | Sens |
+|---|---|---|
+| `createDFrameAdapter` (`:adapter="..."` sur `<d-frame>`) | L'app **embarque** d'autres vues (côté parent) | Enfant → parent : `stateChange` du d-frame enfant est reflété dans le `reactiveSearchParams` de l'app |
+| `window.vIframeOptions = { reactiveParams }` | L'app est **embarquée** dans un d-frame externe (côté enfant) | Parent → enfant : `updateSrc` reçu est appliqué aux params de l'URL **sans recharger l'iframe** |
+
+Une même app peut être les deux à la fois (visu embedded dans un portail ET qui embed elle-même d'autres vues) : il faut alors **les deux**.
 
 ```ts
+// Côté parent : synchroniser les params vers les embeds d-frame
 import createDFrameAdapter from '@data-fair/frame/lib/vue-reactive/state-change-adapter.js'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 
 const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
 ```
 
-> **Note** : `window.vIframeOptions` est obsolète. `@data-fair/frame` fournit un mode compat qui lit encore cette variable pour la transition, mais les nouveaux projets doivent impérativement utiliser `createDFrameAdapter`.
+```ts
+// Côté enfant : éviter le rechargement complet quand l'app est embedded
+// dans un d-frame parent (portail, dashboard, autre app). À mettre dans
+// src/main.ts, au niveau module, AVANT createApp().
+// @ts-expect-error vIframeOptions n'est pas typé globalement
+window.vIframeOptions = { reactiveParams: reactiveSearchParams }
+```
+
+Sans `window.vIframeOptions`, le shim `v-iframe-compat/d-frame-content.js` (injecté par DataFair dans toute iframe) tombe dans son fallback `window.location.href = src` à chaque `updateSrc` → **rechargement complet → clignotement** de la visu.
+
+### Se comporter en enfant d'un d-frame externe
+
+Quand l'app est embarquée dans un portail, un dashboard ou une autre app via `<d-frame>`, le parent envoie des messages `updateSrc` à chaque changement de paramètres synchronisés. Le shim `v-iframe-compat` injecté par DataFair dans toute iframe essaie trois stratégies, dans l'ordre :
+
+1. `window.vIframeOptions.reactiveParams` → applique les params à un objet réactif (pas de rechargement)
+2. `window.vIframeOptions.router` → `router.replace(newRoute)` (pas de rechargement)
+3. Fallback → `window.location.href = src` → **rechargement complet**
+
+Pour éviter le clignotement, exposer `reactiveSearchParams` au shim dès l'initialisation de l'app (avant `createApp` dans `src/main.ts`) :
+
+```ts
+import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
+
+;(window as any).vIframeOptions = { reactiveParams: reactiveSearchParams }
+```
+
+**Quand c'est nécessaire** :
+- L'app est destinée à être embedded dans un portail, un dashboard, ou une autre app via `<d-frame>`.
+- Et le parent utilise `sync-params` (ou modifie le `src` du d-frame).
+
+**Quand ce n'est pas nécessaire** :
+- Visu simple affichée en pleine page sans être embedded.
+- Visu embedded sans `sync-params` côté parent (rare, le parent ne fait que recharger l'iframe au changement de `src`).
+
+Voir `snippets/main.ts` pour le setup complet et `references/migration-guide.md` section "v-iframe → d-frame" pour ne pas supprimer ce bloc lors d'une migration.
 
 ### Communication avec le parent (postMessage)
 
