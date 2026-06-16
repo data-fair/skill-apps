@@ -132,9 +132,27 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 | `snippets/schema-conditional.ts` | Affichage conditionnel (`layout.if` / `layout.switch`) |
 | `snippets/schema-hidden.ts` | Champs cachés (`layout: "none"`) |
 | `snippets/schema-xexports.ts` | Génération de types TypeScript (`x-exports`) |
+| `snippets/schema-color.ts` | Couleurs (string hex + pattern thème/custom, piège `format: "hexcolor"`) |
 
 > **⚠️ Attention : `createSession` est asynchrone**
 > `createSession({ siteInfo: true })` fetch les infos du site (thème, couleurs, locale) via API. Il **doit être `await`** avant d'appeler `vuetifySessionOptions(session)`. Ne jamais appeler `createSession` de manière synchrone en dehors d'une fonction `async`.
+
+> **⚠️ Attention : `createI18n` doit être créé au niveau module, pas dans `init()`**
+> Plusieurs composants de `@data-fair/lib-vuetify` (`ui-notif`, `colors-preview`, `layout-empty-state`, `layout-fetch-error`, ...) appellent `useI18n()` **à l'évaluation du module** (`const { t } = useI18n()` en top-level du fichier compilé). Si `createI18n` est créé dans `init()` (donc après ces imports), ces modules reçoivent une instance i18n non initialisée et les traductions de la lib ne fonctionnent pas (snackbar, empty state, page d'erreur).
+> **Pattern correct** :
+> ```ts
+> // Au niveau module, AVANT init() et AVANT createApp()
+> const i18n = createI18n({ locale: 'fr', fallbackLocale: 'en' })
+>
+> async function init () {
+>   const session = await createSession(...)
+>   i18n.global.locale.value = session.lang.value  // ajustement async
+>   const app = createApp(App)
+>   app.use(i18n)
+>   ...
+> }
+> ```
+> Voir `snippets/main.ts` pour le bootstrap complet.
 
 ## Structure de projet type
 
@@ -269,6 +287,55 @@ Pattern recommandé pour des sous-formulaires conditionnels (ex: choisir un type
 | `getItems` | Sélecteur peuplé dynamiquement | datasets, champs |
 
 > Voir `snippets/schema-hidden.ts`.
+
+### Schémas de couleur
+
+Deux patterns selon le besoin :
+
+**1. Couleur simple (string hex)** — pour la majorité des cas :
+```json
+{
+  "type": "string",
+  "title": "Couleur",
+  "default": "#1976D2",
+  "layout": "color-picker"
+}
+```
+
+**2. Couleur thème OU custom** — quand l'utilisateur doit pouvoir choisir entre une couleur Vuetify (primary, secondary, ...) et une couleur libre :
+```json
+{
+  "type": "object",
+  "title": "Couleur",
+  "discriminator": { "propertyName": "type" },
+  "oneOf": [
+    {
+      "title": "Thème",
+      "properties": {
+        "type": { "const": "theme" },
+        "strValue": {
+          "type": "string",
+          "oneOf": [
+            { "const": "primary", "title": "Primaire" },
+            { "const": "secondary", "title": "Secondaire" }
+          ]
+        }
+      }
+    },
+    {
+      "title": "Personnalisée",
+      "properties": {
+        "type": { "const": "custom" },
+        "hexValue": { "type": "string", "default": "#222222", "layout": "color-picker" }
+      }
+    }
+  ]
+}
+```
+
+> **⚠️ Anti-pattern** : ne jamais écrire `"format": "hexcolor"`. Ce format n'existe pas dans le validateur JSON Schema standard et VJSF 3 émet un warning `unknown format "hexcolor" ignored in schema`. Le rendu reste correct par chance (grâce à `layout: "color-picker"`) mais le `format` est trompeur. À retirer lors de toute migration ou revue de schéma.
+
+> Voir `snippets/schema-color.ts` pour les deux patterns complets et prêts à copier.
 
 ### Arrays avancés
 
