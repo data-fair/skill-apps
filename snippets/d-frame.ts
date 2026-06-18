@@ -17,6 +17,8 @@ const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
 // Côté enfant : exposer reactiveSearchParams au shim v-iframe-compat injecté
 // par DataFair. À mettre dans src/main.ts au niveau module, avant createApp().
 // (voir snippets/main.ts)
+// Pour que DataFair injecte ce shim, le index.html doit contenir :
+//   <meta name="df:sync-state" content="true">
 ;(window as any).vIframeOptions = { reactiveParams: reactiveSearchParams }
 
 // Dans le composable config, exposer dFrameAdapter et accessKey

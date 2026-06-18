@@ -49,7 +49,7 @@ export function createConfig () {
       window.parent.postMessage({
         type: 'set-config',
         content: { field, value }
-      }, '*')
+      }, window.location.origin)
     }
   }
 

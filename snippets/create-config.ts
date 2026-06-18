@@ -1,5 +1,7 @@
 import { computed, inject, provide, ref, type App, type Ref } from 'vue'
 import type { Application, Dataset, Field } from '@data-fair/lib-common-types'
+import createDFrameAdapter from '@data-fair/frame/lib/vue-reactive/state-change-adapter.js'
+import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 
 export interface ConfigState {
   application: Application
@@ -12,6 +14,7 @@ export interface ConfigState {
   datasetUrl: Ref<string | undefined>
   finalizedAt: Ref<string | undefined>
   accessKey: Ref<string | null>
+  dFrameAdapter: ReturnType<typeof createDFrameAdapter>
   error: Ref<string | null>
 }
 
@@ -40,6 +43,9 @@ export function createConfig () {
   const toks = last?.split('%3A')
   const accessKey = ref<string | null>((toks?.length === 2) ? toks[0] : null)
 
+  // Adapter d-frame pour synchroniser les params avec les vues embarquées
+  const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
+
   const error = computed(() => {
     if (!config.value) return 'Il n\'y a pas de configuration définie'
     if (!dataset.value) return 'Veuillez sélectionner une source de données'
@@ -55,7 +61,7 @@ export function createConfig () {
       window.parent.postMessage({
         type: 'set-config',
         content: { field, value }
-      }, '*')
+      }, window.location.origin)
     }
   }
 
@@ -87,6 +93,7 @@ export function createConfig () {
         datasetUrl,
         finalizedAt,
         accessKey,
+        dFrameAdapter,
         error
       })
 

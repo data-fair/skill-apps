@@ -101,7 +101,17 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 <meta name="thumbnail" content="%PUBLIC_URL%/thumbnail.png">
 <meta name="df:filter-concepts" content="true">
 <meta name="df:sync-config" content="true">
+<meta name="df:sync-state" content="true">
 ```
+
+| Meta tag | Rôle |
+|---|---|
+| `df:filter-concepts` | Active les filtres par concepts partagés avec d'autres vues DataFair. |
+| `df:sync-config` | Active le rechargement à chaud de la configuration en mode draft (`postMessage` de type `set-config`). |
+| `df:sync-state` | Active la synchronisation de l'état de l'application avec son parent (portail, dashboard, capture d'écran). DataFair injecte alors les shims `v-iframe-compat` / `d-frame-content`. |
+| `df:overflow` | Active le redimensionnement dynamique de l'iframe dans les portails. |
+
+> **Attention à ne pas confondre** : `df:sync-config` concerne la **configuration** (hot reload draft), tandis que `df:sync-state` concerne l'**état runtime** de l'application (params URL, sélection, etc.). Pour une app embarquée dans un dashboard ou un portail, les deux sont généralement nécessaires.
 
 > **Note sur les filtres par concepts** : le nom canonique reconnu par DataFair est `df:filter-concepts`. Certaines apps récentes utilisent à tort `df:concept-filters` (erreur historique de documentation). Pour les **nouveaux projets**, utilisez impérativement `df:filter-concepts`. Lors d'une migration ou maintenance d'app legacy, corrigez `df:concept-filters` en `df:filter-concepts`.
 

@@ -27,7 +27,7 @@ import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
 // fonctionnent pas (snackbar, empty state, page d'erreur).
 // On initialise avec une locale par défaut et on ajuste depuis la session
 // une fois qu'elle est chargée.
-const i18n = createI18n({ locale: 'fr', fallbackLocale: 'en' })
+const i18n = createI18n({ legacy: false, locale: 'fr', fallbackLocale: 'en' })
 
 async function init () {
   const session = await createSession({ directoryUrl: '/simple-directory', siteInfo: true })
