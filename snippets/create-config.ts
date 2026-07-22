@@ -100,12 +100,17 @@ export function createConfig () {
       window.addEventListener('message', (event) => {
         if (event.data?.type === 'set-config' && event.data?.content) {
           const { content } = event.data
+          // Formats réellement émis par l'UI DataFair (application-config.vue) :
+          // - UI → app : la config complète directement dans content
+          // - app → UI : { field, value } (update par path)
+          // La branche content.configuration est une tolérance défensive
+          // (format enveloppé, jamais émis par l'UI actuelle).
           if (content.configuration) {
-            // DataFair envoie la config complète
             config.value = content.configuration
           } else if (content.chart || content.datasets || content.layers || content.metrics) {
-            // DataFair envoie parfois la config directement dans content
-            config.value = content
+            // Fusionner plutôt qu'écraser : certains émetteurs n'envoient
+            // qu'un sous-arbre modifié (perte des champs frères sinon).
+            config.value = { ...config.value, ...content }
           } else if (content.field && 'value' in content) {
             // Update par path (ex: 'chart.colors.0')
             const newConfig = JSON.parse(JSON.stringify(config.value))

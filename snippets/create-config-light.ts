@@ -85,10 +85,14 @@ export function createConfig () {
       window.addEventListener('message', (event) => {
         if (event.data?.type === 'set-config' && event.data?.content) {
           const { content } = event.data
+          // Formats réels émis par l'UI : config complète directement dans
+          // content (UI → app) ou { field, value } (app → UI). La branche
+          // content.configuration est une tolérance défensive (jamais émise).
           if (content.configuration) {
             config.value = content.configuration
           } else if (content.chart || content.datasets || content.layers || content.metrics) {
-            config.value = content
+            // Fusionner plutôt qu'écraser (sous-arbre modifié possible)
+            config.value = { ...config.value, ...content }
           } else if (content.field && 'value' in content) {
             const newConfig = JSON.parse(JSON.stringify(config.value))
             setByPath(newConfig, content.field, content.value)

@@ -49,6 +49,8 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
 Dans `index.html`, `%APPLICATION%` est remplacé par DataFair au runtime.
 Le code lit `window.APPLICATION` (typé dans `src/types.d.ts`).
 
+> **⚠️ Une seule occurrence du placeholder** : en prod, DataFair remplace `%APPLICATION%` via une regex **non globale** (`replace(/%APPLICATION%/, ...)`) → seule la première occurrence est remplacée. Le dev-server, lui, les remplace toutes (flag `/g`) → comportement divergent dev/prod. Utiliser le placeholder **exactement une fois** dans `index.html`.
+
 **Structure** :
 
 ```ts
@@ -58,6 +60,8 @@ window.APPLICATION = {
   exposedUrl: string,      // URL publique du proxy (utilisé pour l'accessKey)
   apiUrl: string,          // e.g. https://.../api/v1
   wsUrl: string,           // WebSocket URL
+  captureUrl: string,      // URL du service de capture (screenshots / print)
+  applicationKey?: string, // présent uniquement si l'app est accédée avec une clé
   configuration: {
     datasets: [{            // tableau des datasets configurés
       id, href, title, slug,
@@ -90,7 +94,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 ### Fichiers publics obligatoires
 
 - `public/config-schema.json` : DataFair le fetch pour construire le formulaire de config. **Ne jamais renommer ni déplacer**.
-- `public/thumbnail.png` : Miniature pour la galerie d'applications.
+- `public/thumbnail.png` : Miniature pour la galerie d'applications. C'est la **présence du fichier à la racine** qui compte : DataFair résout la miniature via `{baseApp.url}/thumbnail.png`. La meta `thumbnail` utilise donc simplement `content="thumbnail.png"` (relatif) — `%PUBLIC_URL%` n'est substitué par aucun outil, ne pas l'utiliser.
 
 ### Meta tags dans index.html
 
@@ -98,7 +102,8 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 <meta name="application-name" content="Nom de la visu">
 <meta name="title" content="...">
 <meta name="description" content="...">
-<meta name="thumbnail" content="%PUBLIC_URL%/thumbnail.png">
+<meta name="thumbnail" content="thumbnail.png">
+<meta name="df:vjsf" content="3">
 <meta name="df:filter-concepts" content="true">
 <meta name="df:sync-config" content="true">
 <meta name="df:sync-state" content="true">
@@ -106,6 +111,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 
 | Meta tag | Rôle |
 |---|---|
+| `df:vjsf` | Version de VJSF du schéma de config. Seule la valeur `"3"` est reconnue (sinon mode compat VJSF 2). Obligatoire pour les nouveaux projets. |
 | `df:filter-concepts` | Active les filtres par concepts partagés avec d'autres vues DataFair. |
 | `df:sync-config` | Active le rechargement à chaud de la configuration en mode draft (`postMessage` de type `set-config`). |
 | `df:sync-state` | Active la synchronisation de l'état de l'application avec son parent (portail, dashboard, capture d'écran). DataFair injecte alors les shims `v-iframe-compat` / `d-frame-content`. |
@@ -113,7 +119,26 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 
 > **Attention à ne pas confondre** : `df:sync-config` concerne la **configuration** (hot reload draft), tandis que `df:sync-state` concerne l'**état runtime** de l'application (params URL, sélection, etc.). Pour une app embarquée dans un dashboard ou un portail, les deux sont généralement nécessaires.
 
-> **Note sur les filtres par concepts** : le nom canonique reconnu par DataFair est `df:filter-concepts`. Certaines apps récentes utilisent à tort `df:concept-filters` (erreur historique de documentation). Pour les **nouveaux projets**, utilisez impérativement `df:filter-concepts`. Lors d'une migration ou maintenance d'app legacy, corrigez `df:concept-filters` en `df:filter-concepts`.
+> **Note sur les filtres par concepts** : le nom canonique reconnu par DataFair est `df:filter-concepts` (vérifié dans `api/src/applications/service.ts`). Certaines apps récentes utilisent à tort `df:concept-filters` (erreur historique de documentation, zéro occurrence dans le code). Pour les **nouveaux projets**, utilisez impérativement `df:filter-concepts`. Lors d'une migration ou maintenance d'app legacy, corrigez `df:concept-filters` en `df:filter-concepts`.
+
+### Capture d'écran / miniatures
+
+DataFair capture les apps (miniature de galerie, bouton « capture » du backoffice, print PDF) via un service headless qui charge l'app dans un navigateur. L'app peut influencer le timing de la capture.
+
+**Stratégie d'attente du service** :
+1. Si l'app appelle `window.triggerCapture(animationSupported?)` → capture immédiate.
+2. Sinon, après network idle : attente de `triggerCapture` pendant `df:capture-delay` secondes (si la meta est présente), sinon +1 s de sécurité puis capture.
+3. Timeout global du service en dernier recours.
+
+| Meta / mécanisme | Rôle |
+|---|---|
+| `window.triggerCapture(animationSupported?)` | Fonction injectée par le service dans la page. L'appeler dès que la visu est **réellement rendue** (données chargées, carte prête). Passer `true` si l'app supporte le mode animation (GIF). |
+| `<meta name="df:capture-delay" content="2">` | Après network idle, attend `triggerCapture` jusqu'à N secondes avant de capturer quand même. |
+| `<meta name="x-capture" content="trigger">` | **Déprécié** (rétro-compat) : attend `triggerCapture` après network idle, jusqu'au timeout. Remplacer par `df:capture-delay` + appel explicite. |
+| `df:capture-width` / `df:capture-height` | Dimensions proposées par défaut dans la boîte de dialogue de capture du backoffice (défaut : 800×450). |
+| `?thumbnail=true` | Paramètre ajouté à l'URL cible pour la miniature par défaut — l'app peut adapter son rendu (masquer contrôles, légendes, etc.). |
+
+> **⚠️ Piège** : si l'app annonce une attente explicite (`df:capture-delay` ou `x-capture: trigger`) mais n'appelle jamais `triggerCapture` (ex. appel conditionné à une ressource qui n'existe pas), chaque capture attend le **timeout complet** du service. Appeler `triggerCapture` de façon fiable — y compris en cas d'erreur de chargement.
 
 ## Snippets disponibles
 
@@ -133,6 +158,7 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 | `snippets/ui-notif.ts` | Notifications globales avec `<DfUiNotif />` de `@data-fair/lib-vuetify` + `createUiNotif` / `useUiNotif` |
 | `snippets/hot-reload.ts` | Rendre la config réactive en mode draft (df:sync-config="true") |
 | `snippets/draft-qs-filter.ts` | Synchroniser `staticFilters` / `qsFilter` vers DataFair en mode draft |
+| `snippets/report-config-error.ts` | Remonter une erreur de config à DataFair (`POST /error`, mode draft) |
 | `snippets/d-frame.ts` | Intégration d'autres vues DataFair via d-frame (côté parent + côté enfant) |
 | `snippets/schema-tabs.ts` | Organisation par onglets (`allOf` + `title`) |
 | `snippets/schema-discriminator.ts` | Discrimination de type (`discriminator` + `oneOf` + `const`) |
@@ -284,6 +310,14 @@ Pattern recommandé pour des sous-formulaires conditionnels (ex: choisir un type
 **Variables disponibles** : `{q}` (recherche), `${rootData...}`, `${parent...}`, `${context...}`.
 
 > Voir `snippets/schema-getitems.ts` et `snippets/schema-getitems-expr.ts`.
+
+### Prérequis dataset déclarés par l'URL du sélecteur
+
+Les paramètres du `getItems.url` (ou de `x-fromUrl`) de la propriété `datasets` ne servent pas qu'au formulaire : à l'enregistrement de la base application, DataFair résout `config-schema.json` et en **déduit les filtres de compatibilité** (`datasetsFilters`) — ex. `bbox=true` (jeux géo), `concepts=https://schema.org/box`. Ces filtres déterminent les jeux proposés à la configuration et les messages « Cette application nécessite… » du catalogue.
+
+- Déclarer les prérequis dans l'URL du sélecteur racine `datasets` : `api/v1/datasets?status=finalized&bbox=true&...`.
+- Les placeholders `${...}` (ex. `${context.datasetFilter}`) sont ignorés par l'extraction.
+- La meta `vocabulary-require` des apps legacy n'est **plus lue** (aucune occurrence dans le code) : la supprimer lors des migrations et reporter l'exigence dans l'URL du sélecteur.
 
 ### Layouts spéciaux
 
@@ -533,6 +567,12 @@ window.vIframeOptions = { reactiveParams: reactiveSearchParams }
 
 Sans `window.vIframeOptions`, le shim `v-iframe-compat/d-frame-content.js` (injecté par DataFair dans toute iframe) tombe dans son fallback `window.location.href = src` à chaque `updateSrc` → **rechargement complet → clignotement** de la visu.
 
+**Injection du shim en prod** (`api/src/applications/proxy.ts`) — le shim n'est **pas toujours injecté** :
+- URL avec `?d-frame=true` **et** meta `df:sync-state` ou `df:overflow` → `v-iframe-compat/d-frame-content.min.js`.
+- Sinon, meta `df:sync-state` → `@koumoul/v-iframe` (content-window) ; meta `df:overflow` → `iframe-resizer` (contentWindow).
+- Sans ces metas → **aucun shim** : pas de synchro d'état ni de redimensionnement.
+- Le dev-server injecte le shim d-frame **systématiquement** (sans condition) → ne pas se fier au comportement dev pour valider les metas.
+
 ### Se comporter en enfant d'un d-frame externe
 
 Quand l'app est embarquée dans un portail, un dashboard ou une autre app via `<d-frame>`, le parent envoie des messages `updateSrc` à chaque changement de paramètres synchronisés. Le shim `v-iframe-compat` injecté par DataFair dans toute iframe essaie trois stratégies, dans l'ordre :
@@ -561,18 +601,20 @@ Voir `snippets/main.ts` pour le setup complet et `references/migration-guide.md`
 
 ### Communication avec le parent (postMessage)
 
-**Écouter la config en draft** (3 formats possibles) :
+**Écouter la config en draft** — l'UI DataFair n'émet réellement que **2 formats** (vérifié dans `application-config.vue`) :
 
 ```ts
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'set-config' && event.data?.content) {
     const { content } = event.data
     if (content.configuration) {
-      // Config complète reçue de DataFair
+      // Tolérance défensive : format enveloppé, jamais émis par l'UI actuelle
       config.value = content.configuration
     } else if (content.chart || content.datasets || content.layers || content.metrics) {
-      // Config directement dans content (certains formats DataFair)
-      config.value = content
+      // Format réel UI → app : la config directement dans content.
+      // ⚠️ Fusionner avec la config existante plutôt qu'écraser : certains
+      // émetteurs n'envoient qu'un sous-arbre modifié (perte des champs frères sinon).
+      config.value = { ...toRaw(config.value), ...content }
     } else if (content.field && 'value' in content) {
       // Update par path : { field: 'chart.colors.0', value: '#ff0000' }
       const newConfig = JSON.parse(JSON.stringify(config.value))
@@ -582,6 +624,8 @@ window.addEventListener('message', (event) => {
   }
 })
 ```
+
+> **Hors `df:sync-config`** : l'UI ne poste pas de `set-config` — elle recharge l'iframe de prévisualisation à chaque sauvegarde du brouillon.
 
 **Notifier le parent des changements** (visu → DataFair) :
 

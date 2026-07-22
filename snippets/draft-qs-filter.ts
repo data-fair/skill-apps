@@ -12,6 +12,11 @@ import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-glob
 
 // On calcule un `qsFilter` à partir des `staticFilters` et on le pousse vers
 // le parent via postMessage en mode draft.
+//
+// ⚠️ `staticFilters` / `qsFilter` sont des conventions APPLICATIVES (noms de
+// champs de config choisis par l'app) — pas un contrat DataFair. Seul le
+// paramètre `qs` des requêtes datasets (syntaxe Lucene query_string) est
+// contractuel côté API.
 
 function notifyConfigChange (field: string, value: unknown) {
   if (window.parent !== window) {
@@ -36,19 +41,7 @@ watch(() => config.value?.staticFilters, (staticFilters) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Variante : signaler une erreur de config au parent (DataFair)
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Si l'app détecte une erreur de configuration (ex: dataset manquant, champ
-// invalide), elle peut la remonter à DataFair pour affichage dans l'UI.
-
-import { ofetch } from 'ofetch'
-
-if (reactiveSearchParams.draft === 'true') {
-  watch(errorMessage, (message) => {
-    if (message) {
-      ofetch(window.APPLICATION.href + '/error', {
-        method: 'POST',
-        body: { message }
-      })
-    }
-  }, { immediate: true })
-}
+//
+// Voir snippets/report-config-error.ts — endpoint POST {href}/error,
+// réservé au mode draft (permission writeConfig requise, 403 sinon,
+// échec à toujours catcher).
