@@ -448,6 +448,9 @@ Deux patterns selon le besoin :
   - Les `useFetch` avec URLs/query params en `computed` se réexécutent automatiquement quand la config change.
   - Pour les structures dynamiques complexes (tableaux de filtres avec `useFetch` internes), utiliser `effectScope` pour recréer proprement les ressources réactives et éviter les fuites. Voir `snippets/hot-reload.ts`.
 - **État dans l'URL** : filtres, tri, métrique sélectionnée reflétés dans l'URL pour le partage.
+  - Sérialiser les filtres avec la convention interop : champ à concept → `_c_<conceptId>_<op>`, champ sans concept → `_d_<datasetId>_<fieldKey>_<op>` (jamais de clé nue dans une URL partagée — portals et apps ne les lisent pas).
+  - En réception, utiliser `useConceptFilters(reactiveSearchParams, datasetId)` (`@data-fair/lib-vue/concept-filters.js`) pour extraire les filtres `_c_*` et dé-préfixer les `_d_<datasetId>_*` de votre dataset.
+  - Voir `references/filters-url-convention.md`.
 - **Thème dynamique** : sombre/clair fonctionne via `vuetifySessionOptions(session)`.
 
 ### HTTP
@@ -675,6 +678,12 @@ L'adapter synchronise automatiquement les paramètres de recherche entre l'app p
 
 Voir `references/endpoints-datafair.md` pour les endpoints API (utilisés par les apps pour fetcher leurs propres données) et `references/embeds-params.md` pour les paramètres des vues embed (utilisées via d-frame).
 
+> **Convention URL des filtres** : la sérialisation des filtres dans l'URL
+> (interop entre apps, portails et dashboards) suit une convention unique —
+> filtres sur champ à concept = `_c_<conceptId>_<op>`, filtres sur champ sans
+> concept = `_d_<datasetId>_<fieldKey>_<op>` (préfixe obligatoire). Voir
+> `references/filters-url-convention.md`.
+
 ### Endpoints courants
 
 | Type de visu | Endpoint | Description |
@@ -688,7 +697,7 @@ Voir `references/endpoints-datafair.md` pour les endpoints API (utilisés par le
 ### Paramètres communs
 
 - `size`, `q` (recherche textuelle), `sort`, `finalizedAt` (cache)
-- Filtres : privilégier `*_eq` et `*_in` (ex: `departement_eq=75`)
+- Filtres : privilégier `*_eq` et `*_in` (ex: `departement_eq=75`) pour les appels REST directs ; dans une URL partagée (état d'app, pages portals), suivre la convention `_c_<concept>` / `_d_<datasetId>_<field>_<op>` (voir `references/filters-url-convention.md`)
 - `qs` : uniquement pour des filtres dynamiques complexes
 
 ## Checklist de livraison

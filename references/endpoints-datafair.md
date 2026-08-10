@@ -182,7 +182,11 @@ Pour les cartes (tuiles vectorielles ou géométries agrégées).
 | `finalizedAt` | Timestamp de la version du dataset (pour le cache navigateur) |
 | `draft` | `true` pour utiliser le brouillon du dataset (mode édition) |
 
-**Suffixes de filtres disponibles** : `_eq`, `_ne`, `_gt`, `_gte`, `_lt`, `_lte`, `_in`, `_nin`, `_search`
+**Suffixes de filtres disponibles** : `_eq`, `_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in`, `_nin`, `_starts`, `_contains`, `_exists`, `_nexists`, `_search`
+
+> Pour la convention de sérialisation des filtres **dans l'URL** (interop entre
+> apps, `_c_` concepts / `_d_<datasetId>_` champs simples, synchro portals),
+> voir `references/filters-url-convention.md`.
 
 ## Construction des filtres
 
@@ -229,12 +233,17 @@ const qs = 'departement:75,population:>10000,status:actif,publie'
 
 ## Filtres de concepts
 
-Fusionner les filtres statiques (`config.staticFilters`) avec les filtres dynamiques de concepts (`@data-fair/lib-vue/concept-filters.js`) avant d'appeler les endpoints.
+Fusionner les filtres statiques (`config.staticFilters`) avec les filtres de
+concepts reçus du parent avant d'appeler les endpoints. Voir
+`references/filters-url-convention.md` pour la convention complète
+(`_c_<conceptId>_<op>` / `_d_<datasetId>_<field>_<op>`).
 
 ```ts
-import { getConceptFilters } from '@data-fair/lib-vue/concept-filters.js'
+import { useConceptFilters } from '@data-fair/lib-vue/concept-filters.js'
 
-const conceptFilters = computed(() => getConceptFilters(dataset.value))
+// Clés du parent : _c_* conservées telles quelles, _d_<monDatasetId>_ dé-préfixées,
+// filtres des autres datasets ignorés.
+const conceptFilters = useConceptFilters(reactiveSearchParams, datasetId)
 const allFilters = computed(() => ({
   ...config.staticFilters,
   ...conceptFilters.value

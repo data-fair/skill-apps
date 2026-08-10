@@ -136,3 +136,15 @@ Quand votre app supporte plusieurs types d'embed selon la configuration, calcule
 ```
 
 **Règle générale** : votre code lit/écrit dans `reactiveSearchParams` avec la convention **parent**. C'est `:sync-params` qui adapte ce qui est passé à l'enfant. Ne dupliquez pas la logique de préfixage côté composant.
+
+## Convention URL des filtres
+
+La sérialisation des filtres dans l'URL suit une convention unique entre apps,
+portails et dashboards : filtres **par concept** = `_c_<conceptId>_<op>`
+(dataset-agnostique), filtres sur **champ sans concept** = `_d_<datasetId>_<fieldKey>_<op>`
+(préfixe obligatoire dans tout contexte multi-datasets). Les clés nues
+(`departement_eq=75`) ne sont valides que pour un appel REST direct sur un
+dataset unique.
+
+> Voir `references/filters-url-convention.md` pour la référence complète
+> (opérateurs, formats de valeurs, règles d'émission/réception, écarts connus).
