@@ -173,6 +173,42 @@ Prérequis :
   `@data-fair/lib-vue/reactive-search-params-global.js`) + adaptateur
   `createDFrameAdapter(reactiveSearchParams)` côté parent.
 
+## Mode sélection `_s_` (clic → filtre partagé inter-apps)
+
+Une **sélection** (clic sur un segment de graphique, une ligne de tableau, une
+entité sur une carte…) est émise comme un filtre `_c_`/`_d_` **accompagné d'un
+marqueur** `_s_`. Le marqueur permet à l'app source de se ré-exclure (l'app qui
+émet une sélection continue à afficher son propre contexte, pas seulement la
+sélection), tout en laissant les autres apps appliquer le filtre.
+
+**Émission** d'une sélection = un filtre **+ un marqueur** :
+
+| Filtre émis | Marqueur |
+|---|---|
+| `_c_<conceptId>_<op>=<valeur>` | `_s_<conceptId>=app_<applicationId>` |
+| `_d_<datasetId>_<fieldKey>_<op>=<valeur>` | `_s_<datasetId>_<fieldKey>=app_<applicationId>` |
+
+- Le marqueur est la **clé de filtre sans opérateur** (`_s_<conceptId>` /
+  `_s_<ds>_<field>`), ce qui lève l'ambiguïté champ/concept.
+- **Valeur** : `app_<applicationId>` avec `applicationId = window.APPLICATION.id`.
+  Collision connue et assumée : la même app embedée 2× sur la même page pour le
+  même concept.
+- **Lecture (auto-exclusion)** : l'app dont un marqueur porte son identité retire
+  la clé correspondante de ses propres requêtes API (contexte préservé, durable
+  après reload de l'URL). Les autres apps appliquent le filtre normalement — **en
+  v1, le marqueur ne change rien pour les récepteurs**.
+- **Effacement** : chip « ✕ » / « tout effacer » → retirer ses valeurs
+  (read-modify-write sur l'URL), supprimer la clé si vide, supprimer le marqueur.
+- **Cas table** : sélection de ligne = `_d_<datasetId>__id_eq=<lineId>` +
+  `_s_<datasetId>__id=app_table`.
+- **Coin à connaître** : si un filtre préexiste (posé par un agent, un autre
+  composant) sur le même champ et que l'utilisateur clique dans l'app, la **clé
+  entière** est auto-exclue de l'app source (mais pas des autres apps).
+
+**Routage portals** : `isFilterKey` reconnaît le préfixe `_s` ; les blocs
+`sync-params` (application / dataset-table) routent `_s*` comme les filtres
+(`_c*,_s*,_d*,*:<uuid>_` et `_s*,_c*,*_*:_d_<id>_,*:<uuid>_`).
+
 ## Cas portals : synchro via l'URL dans les pages
 
 Les pages de portals reflètent les filtres de page dans l'URL avec la même
