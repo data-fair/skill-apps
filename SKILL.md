@@ -1,13 +1,14 @@
 ---
 name: skill-apps
 description: |
-  Guide de développement pour les applications DataFair.
-  Utiliser ce skill dès que l'utilisateur travaille sur une application DataFair,
-  qu'il crée une nouvelle app, migre un projet legacy, ou modifie une app existante.
+  Utiliser dès que l'utilisateur travaille sur une application DataFair : création d'une
+  nouvelle app, migration d'un projet legacy, modification ou reprise d'une app existante.
   S'applique aux projets Vue 3 + Vuetify 4 + Vite.
-  S'utilise aussi lorsqu'on parle de createConfig, useFetch, reactiveSearchParams,
+  Utiliser aussi lorsqu'il est question de createConfig, useFetch, reactiveSearchParams,
   window.APPLICATION, config-schema.json, df-dev-server, d-frame, d'intégration iframe DataFair,
-  ou de la configuration (.dev-config.json).
+  de la configuration (.dev-config.json), du contenu d'index.html et de ses métas
+  (application-name, df:sync-state, df:vjsf, df:capture-delay), ou de l'accessibilité RGAA
+  d'une visualisation.
 ---
 
 # Skill Apps – DataFair Applications
@@ -101,20 +102,79 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 ### Fichiers publics obligatoires
 
 - `public/config-schema.json` : DataFair le fetch pour construire le formulaire de config. **Ne jamais renommer ni déplacer**.
-- `public/thumbnail.png` : Miniature pour la galerie d'applications. C'est la **présence du fichier à la racine** qui compte : DataFair résout la miniature via `{baseApp.url}/thumbnail.png`. La meta `thumbnail` utilise donc simplement `content="thumbnail.png"` (relatif) — `%PUBLIC_URL%` n'est substitué par aucun outil, ne pas l'utiliser.
+- `public/thumbnail.png` : Miniature pour la galerie d'applications. C'est la **présence du fichier à la racine** qui compte, et elle seule : `baseApp.image` est calculé en dur — `baseApp.url + 'thumbnail.png'` (`base-applications/operations.ts`). La meta `thumbnail` n'a aucun consommateur, ne pas la déclarer. `%PUBLIC_URL%` n'est substitué par aucun outil, ne pas l'utiliser non plus.
 
-### Meta tags dans index.html
+### index.html — document complet
 
 ```html
-<meta name="application-name" content="Nom de la visu">
-<meta name="title" content="...">
-<meta name="description" content="...">
-<meta name="thumbnail" content="thumbnail.png">
-<meta name="df:vjsf" content="3">
-<meta name="df:filter-concepts" content="true">
-<meta name="df:sync-config" content="true">
-<meta name="df:sync-state" content="true">
+<!DOCTYPE html>
+<html><!-- pas de lang : posé par le proxy data-fair -->
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Charts</title>
+
+    <!-- contrat data-fair, lu à l'exécution -->
+    <meta name="df:vjsf" content="3">
+    <meta name="df:filter-concepts" content="true">
+    <meta name="df:sync-config" content="true">
+    <meta name="df:sync-state" content="true">
+    <meta name="df:overflow" content="false">
+
+    <!-- catalogue, lu à l'import — migrera vers registry -->
+    <meta name="application-name" content="app-charts">
+    <meta name="description" content="A simple charts application for data-fair.">
+
+    <script>window.APPLICATION=%APPLICATION%;</script>
+  </head>
+  <body>
+    <main id="app" style="height:100vh"></main>
+  </body>
+</html>
 ```
+
+Quatre points de ce squelette ne se devinent pas :
+
+- **Pas d'attribut `lang` sur `<html>`.** Le proxy filtre l'attribut déclaré puis le repose depuis la locale de la requête (`api/src/applications/proxy.ts`). Conserver le commentaire : sans lui, un agent qui régénère le fichier remettra `lang="fr"`, que tous les linters HTML réclament.
+- **`<meta charset>` en premier**, dans les 1024 premiers octets — un bloc de commentaire placé avant suffit à le repousser et à casser la validation.
+- **Un seul `<title>` et une seule `<meta name="description">`.** Les dupliquer avec un attribut `lang` pour porter l'i18n est invalide en HTML et produit deux erreurs W3C. L'i18n du catalogue passera par registry, qui porte `title` et `description` en objets `{ en, fr }`.
+- **`<main id="app">` et non `<div id="app">`** — cf. `references/accessibility-rgaa.md`.
+
+#### `<title>` et `meta name="title"` : deux choses différentes
+
+`<title>` est le titre du document, pour l'utilisateur et les technologies d'assistance. `meta name="title"` est le libellé du modèle au catalogue DataFair.
+
+Les deux alimentent `meta.title`, mais **`meta name="title"` écrase la valeur issue de l'élément** : `meta.title` est posé depuis `<title>` puis réécrit par la boucle sur les métas, `title` étant aussi une clé de `metasByName` (`base-applications/service.ts`). Une brique qui déclare les deux n'utilise donc pas son `<title>` comme métadonnée.
+
+**Convention retenue** : on abandonne `meta name="title"`. `<title>` porte le nom anglais du modèle (`Charts`, `Dashboards`, `Treemap`). Le titre du document servi à l'utilisateur sera posé par le proxy depuis le titre de la visualisation, comme il le fait pour `lang` — aucun `document.title` à écrire dans l'application.
+
+#### `application-name` : la clé d'identité, pas un libellé
+
+```
+nom du dépôt  =  package.json name (hors scope)  =  meta application-name
+     app-charts        @data-fair/app-charts             app-charts
+```
+
+Format `[a-z0-9-]` : sans accent, sans espace, sans majuscule.
+
+C'est la **clé d'identité de la brique entre ses versions**. Elle permet à DataFair de reconnaître `app-charts@1.2` et `app-charts@1.3` comme un même modèle et de proposer la montée de version — filtre `?applicationName=`, qui matche `applicationName` ou `meta.application-name` (`base-applications/router.ts`). Champ requis du schéma `BaseApp`, et seule porte d'entrée à l'import si l'application n'expose pas de `config-schema.json`.
+
+C'est aussi ce qui rend un renommage possible. Le nom du dépôt est invisible pour DataFair, qui ne voit qu'une URL de brique : le renommer n'a aucun effet. Renommer le paquet npm change l'URL, donc l'identifiant de la brique (`id: slug(app.url)`) — DataFair enregistre une **nouvelle** brique, l'ancienne subsiste et les applications existantes continuent de fonctionner. `application-name` inchangée relie les deux.
+
+> **Règle de modification** : à la création, les trois noms alignés sont une contrainte. Sur une application existante, **n'en modifier aucun des trois** — c'est une décision humaine, jamais un effet de bord d'une migration. Réaligner une brique déjà enregistrée exige de patcher aussi l'`applicationName` **stocké** de toutes ses versions, sinon la correspondance des versions est perdue.
+
+#### Métas à ne pas déclarer
+
+| Méta | Raison |
+|---|---|
+| `keywords` | extraite dans `baseApp.meta.keywords`, jamais relue. Aucun consommateur dans data-fair, portals, registry, capture, frame ni lib. Absente du type `BaseApp` |
+| `thumbnail` | aucun consommateur, `baseApp.image` est calculé en dur (cf. fichiers publics obligatoires) |
+| `vocabulary-accept`, `vocabulary-require` | zéro occurrence, tous dépôts confondus. Les filtres sur jeux de données sont déduits de `config-schema.json` et stockés dans `datasetsFilters` |
+| `version` | `baseApp.version` est déduit du segment de version de l'URL de la brique, ou saisi en administration. Attention, ce repli est cassé pour les URL jsdelivr : `.../app-charts@1.3/dist/` donne `"dist"`. Registry fournira la version depuis le paquet npm |
+| `title` | abandonnée, cf. ci-dessus |
+| `x-capture` | déprécié, cf. section capture |
+| `{VERSION}` | artefact de build, cf. ci-dessous |
 
 | Meta tag | Rôle |
 |---|---|
@@ -122,7 +182,9 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 | `df:filter-concepts` | Active les filtres par concepts partagés avec d'autres vues DataFair. |
 | `df:sync-config` | Active le rechargement à chaud de la configuration en mode draft (`postMessage` de type `set-config`). |
 | `df:sync-state` | Active la synchronisation de l'état de l'application avec son parent (portail, dashboard, capture d'écran). DataFair injecte alors les shims `v-iframe-compat` / `d-frame-content`. |
-| `df:overflow` | Active le redimensionnement dynamique de l'iframe dans les portails. |
+| `df:overflow` | Active le redimensionnement dynamique de l'iframe dans les portails (injection d'`iframe-resizer`). `"true"` pour un tableau de bord qui s'allonge, `"false"` pour une visu à hauteur fixe. |
+
+> **⚠️ `df:sync-state` : toujours la déclarer explicitement.** Le proxy teste `=== "true"` (`api/src/applications/proxy.ts`), tandis que le dialogue de capture du backoffice teste « présente **et** `!== "false"` » (`ui/src/components/application/application-capture-dialog.vue`). Omettre la balise et la mettre à `"false"` ne sont donc pas équivalents partout.
 
 > **Attention à ne pas confondre** : `df:sync-config` concerne la **configuration** (hot reload draft), tandis que `df:sync-state` concerne l'**état runtime** de l'application (params URL, sélection, etc.). Pour une app embarquée dans un dashboard ou un portail, les deux sont généralement nécessaires.
 
@@ -144,7 +206,7 @@ DataFair capture les apps (miniature de galerie, bouton « capture » du backoff
 | `window.triggerCapture(animationSupported?)` | Fonction injectée par le service dans la page. L'appeler dès que la visu est **réellement rendue** (données chargées, carte prête). Passer `true` si l'app supporte le mode animation (GIF). |
 | `<meta name="df:capture-delay" content="2">` | Après network idle, attend `triggerCapture` jusqu'à N secondes avant de capturer quand même. |
 | `<meta name="x-capture" content="trigger">` | **Déprécié** (rétro-compat) : attend `triggerCapture` après network idle, jusqu'au timeout. Remplacer par `df:capture-delay` + appel explicite. |
-| `df:capture-width` / `df:capture-height` | Dimensions proposées par défaut dans la boîte de dialogue de capture du backoffice (défaut : 800×450). |
+| `df:capture-width` / `df:capture-height` | Dimensions de la capture, en pixels. **Trois niveaux de défauts** : le service capture retient 800×450 si l'appelant n'envoie rien (`capture/api/routers/capture.ts`), le dialogue du backoffice pré-remplit `meta \|\| 800×450`, les portails envoient `meta \|\| 1280×720` (`portals/.../application-capture.vue`). Même ratio 16:9, résolutions différentes. À ne déclarer que si le rendu impose un format précis — sinon laisser les appelants décider. |
 | `?thumbnail=true` | Paramètre ajouté à l'URL cible pour la miniature par défaut — l'app peut adapter son rendu (masquer contrôles, légendes, etc.). |
 
 > **⚠️ Piège** : si l'app annonce une attente explicite (`df:capture-delay` ou `x-capture: trigger`) mais n'appelle jamais `triggerCapture` (ex. appel conditionné à une ressource qui n'existe pas), chaque capture attend le **timeout complet** du service. Appeler `triggerCapture` de façon fiable — y compris en cas d'erreur de chargement.
@@ -529,7 +591,27 @@ const baseParams = useDebounce(
 )
 ```
 
-### Accessibilité / UX
+### Accessibilité (RGAA)
+
+**Référence complète : `references/accessibility-rgaa.md`.** À lire dès qu'on touche au rendu d'une visualisation ou à `index.html`.
+
+Les applications sont majoritairement embarquées dans des portails du secteur public soumis au RGAA 4.1, et une brique non conforme rend non conformes **toutes** les visualisations qui l'utilisent.
+
+Le point à comprendre : le document servi à `/data-fair/app/<id>` est une **page web autonome**. Il n'hérite ni de la langue, ni du `<main>`, ni des titres de la page porteuse. Une visualisation qui rend dans un `<canvas>` sans alternative a un arbre d'accessibilité **vide** — un lecteur d'écran ne restitue rien, et aucun réglage de couleur n'y change quoi que ce soit.
+
+Les cinq points qui reviennent sur tout le parc :
+
+| Point | Critères |
+|---|---|
+| `<main id="app">` et non `<div id="app">` | 9.2, 12.6 |
+| Nom accessible + tableau de données équivalent pour tout canvas ou svg porteur d'information | 1.1, 1.6, 4.8, 4.9 |
+| Visualisation atteignable et opérable au clavier, infobulles masquables par Échap | 7.1, 7.3, 10.13, 12.11 |
+| Texte du graphique agrandissable à 200 % — le texte rasterisé d'un canvas ne l'est pas | 10.4 |
+| Séries distinguables autrement que par la couleur, ratios ≥ 3:1 — y compris dans les palettes par défaut du schéma de config | 3.1, 3.3 |
+
+Un rendu **SVG** satisfait gratuitement le critère 10.4 et se rend accessible sur place, contrairement à un canvas. À prendre en compte au moment de choisir une bibliothèque de graphiques.
+
+### États de chargement et d'erreur (UX)
 
 - Gérer l'état de chargement (`loading` de `useFetch` ou `useAsyncAction`).
 - Gérer l'état d'erreur (snackbar ou `v-empty-state`).
@@ -767,6 +849,10 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] `npm run lint` passe
 - [ ] `public/config-schema.json` est généré et à jour
 - [ ] `public/thumbnail.png` est présent
+- [ ] `index.html` : pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>`, une seule `<meta name="description">`, `<main id="app">`
+- [ ] `application-name` = nom du dépôt = nom du paquet, en `[a-z0-9-]`
+- [ ] aucune méta morte (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`)
+- [ ] accessibilité : checklist de `references/accessibility-rgaa.md` passée
 - [ ] `useFetch` utilisé partout (pas axios / ofetch direct)
 - [ ] Réactivité query params OK
 - [ ] Réactivité config draft OK (test mode draft dans DataFair)
@@ -789,6 +875,8 @@ Points clés :
 ## Notes pour les agents
 
 - **Ne jamais modifier** la logique `window.APPLICATION` ni renommer `public/config-schema.json`.
+- **Ne jamais modifier** le nom du dépôt, le `name` du `package.json` ni la méta `application-name` d'une application existante : décision humaine (cf. section `application-name`).
+- **Une correction dans `index.html` peut ne pas remonter dans le catalogue.** Les champs Titre, Description, Identifiant d'application, Version, Image et Catégorie de l'écran d'administration des briques font un `$set` direct en base, et la résolution est `baseApp.X || baseApp.meta.X` (`base-applications/operations.ts`) : la valeur saisie gagne toujours sur la méta et **survit aux ré-imports**. Pour revenir à la valeur du code, vider le champ côté administration.
 - Privilégier la logique métier dans les **composables** plutôt que dans les composants.
 - Garder les composants comme des **orchestrateurs** : props, emits, appels aux composables, template.
 - Tout nouveau fichier source doit être `.ts` ou `.vue` avec `lang="ts"`.
