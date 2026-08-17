@@ -182,7 +182,7 @@ C'est aussi ce qui rend un renommage possible. Le nom du dépôt est invisible p
 | `df:filter-concepts` | Active les filtres par concepts partagés avec d'autres vues DataFair. |
 | `df:sync-config` | Active le rechargement à chaud de la configuration en mode draft (`postMessage` de type `set-config`). |
 | `df:sync-state` | Active la synchronisation de l'état de l'application avec son parent (portail, dashboard, capture d'écran). DataFair injecte alors les shims `v-iframe-compat` / `d-frame-content`. |
-| `df:overflow` | Active le redimensionnement dynamique de l'iframe dans les portails (injection d'`iframe-resizer`). `"true"` pour un tableau de bord qui s'allonge, `"false"` pour une visu à hauteur fixe. |
+| `df:overflow` | Déclare que la visu peut grandir au-delà de la hauteur du conteneur (tableau de bord qui s'allonge). Lu par les parents (dashboard, portail, service) pour décider si l'iframe peut fluer. Le redimensionnement **moderne** est géré nativement par d-frame : côté enfant via `data-iframe-height` sur la racine, côté parent via `resize="auto"` sur `<d-frame>`. `iframe-resizer` n'est plus utilisé que sur le chemin **legacy** sans `?d-frame=true`. `"true"` pour une visu qui s'allonge, `"false"` pour une visu à hauteur fixe. |
 
 > **⚠️ `df:sync-state` : toujours la déclarer explicitement.** Le proxy teste `=== "true"` (`api/src/applications/proxy.ts`), tandis que le dialogue de capture du backoffice teste « présente **et** `!== "false"` » (`ui/src/components/application/application-capture-dialog.vue`). Omettre la balise et la mettre à `"false"` ne sont donc pas équivalents partout.
 
@@ -667,10 +667,12 @@ window.vIframeOptions = { reactiveParams: reactiveSearchParams }
 Sans `window.vIframeOptions`, le shim `v-iframe-compat/d-frame-content.js` (injecté par DataFair dans toute iframe) tombe dans son fallback `window.location.href = src` à chaque `updateSrc` → **rechargement complet → clignotement** de la visu.
 
 **Injection du shim en prod** (`api/src/applications/proxy.ts`) — le shim n'est **pas toujours injecté** :
-- URL avec `?d-frame=true` **et** meta `df:sync-state` ou `df:overflow` → `v-iframe-compat/d-frame-content.min.js`.
-- Sinon, meta `df:sync-state` → `@koumoul/v-iframe` (content-window) ; meta `df:overflow` → `iframe-resizer` (contentWindow).
+- URL avec `?d-frame=true` **et** meta `df:sync-state` ou `df:overflow` → `v-iframe-compat/d-frame-content.min.js`. C'est la voie **moderne** : ce shim gère à la fois la synchro d'état (`updateSrc`) et le redimensionnement (`data-iframe-height` → message `df-child:height`).
+- Sinon (URL sans `?d-frame=true`, **chemin legacy**) : meta `df:sync-state` → `@koumoul/v-iframe` (content-window) ; meta `df:overflow` → `iframe-resizer` (contentWindow).
 - Sans ces metas → **aucun shim** : pas de synchro d'état ni de redimensionnement.
 - Le dev-server injecte le shim d-frame **systématiquement** (sans condition) → ne pas se fier au comportement dev pour valider les metas.
+
+> **⚠️ `iframe-resizer` est un héritage du chemin legacy** (sans `?d-frame=true`). Pour tout nouvel embed ou migration, c'est d-frame qui porte le redimensionnement : voir la sous-section « Redimensionnement » ci-dessous. Ne pas compter sur `iframe-resizer` pour une app embarquée via `<d-frame>`.
 
 ### Se comporter en enfant d'un d-frame externe
 
@@ -769,6 +771,46 @@ const { dFrameAdapter, accessKey } = useConfig()
 ```
 
 L'adapter synchronise automatiquement les paramètres de recherche entre l'app parent et l'embed. L'accessKey propage les droits d'accès.
+
+#### Redimensionnement
+
+Le redimensionnement des embeds d-frame remplace l'ancien `iframe-resizer` (chemin legacy sans `?d-frame=true`). Il repose sur un protocole natif : l'app **enfant** mesure ses éléments porteurs d'un attribut `data-iframe-height`, et le composant **parent** `d-frame` applique la hauteur reçue.
+
+**Côté enfant** (l'app embarquée) — poser `data-iframe-height` sur le ou les éléments dont la hauteur doit piloter l'iframe :
+
+```vue
+<template>
+  <v-container data-iframe-height>
+    ...
+  </v-container>
+</template>
+```
+
+- `data-iframe-height="<offset>"` ajoute un décalage en pixels sous l'élément.
+- `data-iframe-height="false"` / `"no"` neutralise l'élément.
+- Le shim `d-frame-content` injecté par DataFair mesure le maximum des positions basses et envoie `df-child:height` au parent (`lib/DFrameContent.ts`). Le `data-iframe-height` est donc lu **même sans code app** : il suffit que l'app soit servie avec `?d-frame=true` et déclare `df:sync-state` ou `df:overflow`.
+
+**Côté parent** (l'app qui intègre) — contrôler la politique de hauteur via l'attribut `resize` du `<d-frame>` :
+
+| `resize` | Comportement |
+|---|---|
+| `auto` | Hauteur pilotée par les messages `df-child:height` de l'enfant (`data-iframe-height`). |
+| `yes` | Même protocole, mais l'iframe est prête dès le premier message de hauteur. |
+| `no` | Hauteur fixe : attribut `height`, sinon ratio d'aspect (`aspect-ratio`). |
+
+```vue
+<template>
+  <d-frame
+    :src="src"
+    :adapter="dFrameAdapter"
+    resize="auto"
+  />
+</template>
+```
+
+> **⚠️ Le parent décide, l'enfant annonce.** Une app qui déclare `df:overflow="true"` **annonce** qu'elle peut grandir, mais c'est le `resize` du `<d-frame>` parent qui **active** la prise en compte (`resize="auto"`). C'est ainsi que `app-dashboards` pilote ses éléments : il lit la meta `df:overflow` de l'app embarquée pour choisir entre hauteur contrainte et hauteur fluide (`src/components/element-dframe.vue`).
+
+> Voir la documentation `@data-fair/frame` : `doc/pages/dynamic-height.vue` (tagging `data-iframe-height`, offset), `doc/pages/dynamic-src.vue` (variant vue-router) et `doc/pages/iframe-resizer.vue` (comparaison / rétro-ingénierie).
 
 ## Récupération des données
 

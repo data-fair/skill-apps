@@ -21,6 +21,14 @@ const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
 //   <meta name="df:sync-state" content="true">
 ;(window as any).vIframeOptions = { reactiveParams: reactiveSearchParams }
 
+// Côté enfant, redimensionnement (remplace iframe-resizer) : poser
+// `data-iframe-height` sur la racine de l'app pour que le shim d-frame
+// mesure sa hauteur et l'envoie au parent. Déclarer aussi
+//   <meta name="df:overflow" content="true">   (si la visu peut grandir)
+// dans index.html. Côté parent, le <d-frame> doit porter `resize="auto"` :
+//   <d-frame :src="..." :adapter="dFrameAdapter" resize="auto" />
+// Voir SKILL.md > "Intégration iframe / d-frame" > "Redimensionnement".
+
 // Dans le composable config, exposer dFrameAdapter et accessKey
 // Dans le composant, utiliser d-frame avec l'adapter et l'accessKey
 

@@ -242,6 +242,30 @@ Dans le template, remplacer `<v-iframe>` par `<d-frame>` avec l'adapter et l'acc
 
 > **Ne pas supprimer `window.vIframeOptions`** lors d'une migration. Il n'est pas remplacé par `createDFrameAdapter` : les deux traitent des sens de synchronisation différents (parent → enfant vs enfant → parent). Le mode compat du shim est maintenu tant que le shim `v-iframe-compat/d-frame-content.js` est injecté par DataFair.
 
+### iframe-resizer → d-frame (redimensionnement)
+
+Le redimensionnement piloté par `iframe-resizer` (injecté sur le chemin legacy sans `?d-frame=true`, déclenché par la meta `df:overflow`) est remplacé par le protocole natif de d-frame :
+
+- **Côté enfant** : poser `data-iframe-height` sur la racine de l'app. Le shim `d-frame-content` mesure la hauteur et l'envoie au parent.
+- **Côté parent** : le `<d-frame>` porte `resize="auto"` pour prendre en compte ces messages de hauteur.
+- La meta `df:overflow` reste utile comme **contrat d'annonce** : elle dit au parent (ex. `app-dashboards`) que la visu peut grandir. C'est le `resize="auto"` du parent qui active réellement la hauteur fluide.
+
+Concrètement, sur une app legacy qui s'allongeait avec `iframe-resizer` :
+
+```vue
+<!-- AVANT (legacy) : la hauteur était pilotée par iframe-resizer via df:overflow -->
+<v-container>
+  ...
+</v-container>
+
+<!-- APRÈS : tagging d-frame + resize=auto côté parent -->
+<v-container data-iframe-height>
+  ...
+</v-container>
+```
+
+Ne pas conserver de dépendance à `iframe-resizer` dans le code de l'app : la mesure est désormais faite par le shim d-frame injecté par DataFair (`data-iframe-height`), pas par la lib.
+
 ## Checklist de migration
 
 1. [ ] Migrer le build (Vue CLI → Vite)
