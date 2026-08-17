@@ -6,7 +6,8 @@ description: |
   qu'il crée une nouvelle app, migre un projet legacy, ou modifie une app existante.
   S'applique aux projets Vue 3 + Vuetify 4 + Vite.
   S'utilise aussi lorsqu'on parle de createConfig, useFetch, reactiveSearchParams,
-  window.APPLICATION, config-schema.json, df-dev-server, d-frame, ou d'intégration iframe DataFair.
+  window.APPLICATION, config-schema.json, df-dev-server, d-frame, d'intégration iframe DataFair,
+  ou de la configuration (.dev-config.json).
 ---
 
 # Skill Apps – DataFair Applications
@@ -77,6 +78,12 @@ window.APPLICATION = {
 
 **Important** : les datasets et leurs schemas sont dans `window.APPLICATION.configuration.datasets` (tableau). Les métadonnées (schema, champs, concepts, finalizedAt) sont **déjà injectées** par DataFair — inutile de les fetcher via API. L'app accède aux données via le `href` du dataset.
 
+### .dev-config.json — configuration courante de dev
+
+`df-dev-server` lit `.dev-config.json` à la racine du projet et injecte son contenu dans `window.APPLICATION.configuration` via `%APPLICATION%`. C'est l'équivalent dev de la config injectée par DataFair en production.
+
+> **Règle** : quand l'utilisateur dit « la configuration », lire `.dev-config.json`. Le fichier est aussi disponible pour tout contexte de configuration — le lire si on a besoin de plus de contexte, même sans demande explicite.
+
 ### AccessKey
 
 L'accessKey est extraite de l'`exposedUrl` quand l'app est accédée via un lien partagé :
@@ -121,6 +128,8 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 
 > **Note sur les filtres par concepts** : le nom canonique reconnu par DataFair est `df:filter-concepts` (vérifié dans `api/src/applications/service.ts`). Certaines apps récentes utilisent à tort `df:concept-filters` (erreur historique de documentation, zéro occurrence dans le code). Pour les **nouveaux projets**, utilisez impérativement `df:filter-concepts`. Lors d'une migration ou maintenance d'app legacy, corrigez `df:concept-filters` en `df:filter-concepts`.
 
+> **⚠️ Artefact de build `{VERSION}`** : ne jamais laisser de placeholder non substitué dans les metas de `index.html`. Une meta `<meta name="{VERSION}" content="trigger">` (nom littéral `{VERSION}`) s'est retrouvée en prod dans 32 base apps (800+ apps) — elle ne sert à rien et pollue le catalogue. Avant chaque build, vérifier qu'aucun `{...}` non substitué ne subsiste ; lors d'une migration, retirer la meta `{VERSION}` si elle est présente.
+
 ### Capture d'écran / miniatures
 
 DataFair capture les apps (miniature de galerie, bouton « capture » du backoffice, print PDF) via un service headless qui charge l'app dans un navigateur. L'app peut influencer le timing de la capture.
@@ -139,6 +148,8 @@ DataFair capture les apps (miniature de galerie, bouton « capture » du backoff
 | `?thumbnail=true` | Paramètre ajouté à l'URL cible pour la miniature par défaut — l'app peut adapter son rendu (masquer contrôles, légendes, etc.). |
 
 > **⚠️ Piège** : si l'app annonce une attente explicite (`df:capture-delay` ou `x-capture: trigger`) mais n'appelle jamais `triggerCapture` (ex. appel conditionné à une ressource qui n'existe pas), chaque capture attend le **timeout complet** du service. Appeler `triggerCapture` de façon fiable — y compris en cas d'erreur de chargement.
+
+> **Règle de migration** : `x-capture` est déprécié — lors de toute migration ou maintenance d'app existante, le **retirer** et le remplacer par `df:capture-delay` + un appel explicite à `window.triggerCapture()` (fiable, y compris en erreur). Une app qui garde `x-capture` sans jamais appeler `triggerCapture` fait attendre le timeout du service de capture à chaque capture backoffice (constaté sur ~100 base apps en prod, 2 600+ apps configurées).
 
 ## Snippets disponibles
 
