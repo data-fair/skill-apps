@@ -168,7 +168,8 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 | `snippets/error-handling.ts` | Gestion d'erreurs API (snackbar + `useFetch` / `useAsyncAction`) |
 | `snippets/ui-notif.ts` | Notifications globales avec `<DfUiNotif />` de `@data-fair/lib-vuetify` + `createUiNotif` / `useUiNotif` |
 | `snippets/hot-reload.ts` | Rendre la config réactive en mode draft (df:sync-config="true") |
-| `snippets/draft-qs-filter.ts` | Synchroniser `staticFilters` / `qsFilter` vers DataFair en mode draft |
+| `snippets/draft-qs-filter.ts` | **Déprécié** — ancienne sync `staticFilters` → `qsFilter` (abandonnée : plus de `qs` pour les filtres statiques) |
+| `snippets/schema-static-filters.ts` | Définition VJSF des filtres statiques prédéfinis (`in`, `out`, `interval`, `starts`, `exists`, `notExists`) |
 | `snippets/report-config-error.ts` | Remonter une erreur de config à DataFair (`POST /error`, mode draft) |
 | `snippets/d-frame.ts` | Intégration d'autres vues DataFair via d-frame (côté parent + côté enfant) |
 | `snippets/schema-tabs.ts` | Organisation par onglets (`allOf` + `title`) |
@@ -337,7 +338,7 @@ Les paramètres du `getItems.url` (ou de `x-fromUrl`) de la propriété `dataset
 | `slider` | Entier avec curseur | `opacity`, `tension` |
 | `color-picker` | Sélecteur de couleur | `color` |
 | `textarea` | Texte multiligne | `description` |
-| `none` | Champ caché | `qsFilter`, `uuid` |
+| `none` | Champ caché | `uuid`, `hash` |
 | `tabs` | Onglets explicites à la racine | data-fair-metrics |
 | `getItems` | Sélecteur peuplé dynamiquement | datasets, champs |
 
@@ -514,12 +515,13 @@ const { data: lines, loading, error } = useFetch('/api/v1/datasets/123/lines')
 ```ts
 import { useDebounce } from '@vueuse/core'
 import { computed } from 'vue'
+import { filters2params } from '@data-fair/lib-utils/filters/index.js'
 
 const baseParams = useDebounce(
   computed(() => {
-    const params: Record<string, string> = { ...conceptFilters }
+    const params: Record<string, any> = { ...conceptFilters }
     if (staticFilters.length) {
-      params.qs = filters2qs(staticFilters)
+      Object.assign(params, filters2params(staticFilters)) // params REST, plus de `qs`
     }
     return params
   }),
@@ -710,7 +712,53 @@ Voir `references/endpoints-datafair.md` pour les endpoints API (utilisés par le
 
 - `size`, `q` (recherche textuelle), `sort`, `finalizedAt` (cache)
 - Filtres : privilégier `*_eq` et `*_in` (ex: `departement_eq=75`) pour les appels REST directs ; dans une URL partagée (état d'app, pages portals), suivre la convention `_c_<concept>` / `_d_<datasetId>_<field>_<op>` (voir `references/filters-url-convention.md`)
-- `qs` : uniquement pour des filtres dynamiques complexes
+- `qs` : uniquement pour des filtres dynamiques complexes. **Ne plus l'utiliser pour les filtres statiques** — voir la section `staticFilters` ci-dessous.
+
+### Filtres statiques prédéfinis (`staticFilters`)
+
+Les apps définissent souvent dans leur config un tableau `staticFilters` de filtres
+appliqués en permanence aux sources. Chaque filtre est un objet
+`{ type, field, ... }` où `field` peut être une chaîne (clé du champ) ou un objet
+`{ key }` (normalisation app-side `normalizeStaticFilters` : string → `{ key }`).
+
+**⚠️ Ne plus utiliser le paramètre `qs` pour les filtres statiques.** La conversion se
+fait en **paramètres REST suffixés** via `filters2params` de
+`@data-fair/lib-utils/filters`. Les fonctions `filter2qs` / `filters2qs` et le champ de
+config `qsFilter` associé sont **dépréciés** (le `qs` reste réservé aux logiques de
+filtrage complexes, cf. « Paramètres communs »).
+
+| type | sens | param REST |
+|---|---|---|
+| `in` | inclure des valeurs | `key_in=v1,v2` |
+| `out` | exclure des valeurs | `key_nin=v1,v2` |
+| `interval` | intervalle (bornes incluses) | `key_gte=min` + `key_lte=max` (seules les bornes renseignées sont émises) |
+| `starts` | commence par | `key_starts=prefixe` |
+| `exists` | exclure les valeurs vides / non définies | `key_exists` (valeur `' '`, convention UI DataFair) |
+| `notExists` | restreindre aux valeurs vides / non définies | `key_nexists` (valeur `' '`, convention UI DataFair) |
+
+La définition canonique du type `Filtres` et la conversion vivent dans
+`@data-fair/lib-utils` (monorepo `data-fair/lib`, `packages/utils/filters/schema.json`
++ `index.ts`). Le schéma UI d'une app doit rester aligné avec ce type : il duplique la
+définition `oneOf` (discriminator sur `type`, cf. « Discrimination de type ») en y
+ajoutant les `getItems` dataset-spécifiques (sélecteur de champ, valeurs) — voir
+`snippets/schema-static-filters.ts`.
+
+Flux runtime :
+
+```ts
+import { filters2params } from '@data-fair/lib-utils/filters/index.js'
+import { normalizeStaticFilters } from '@/utils/staticFilters' // field string → { key }
+
+const sf = normalizeStaticFilters(config.staticFilters)
+const params: Record<string, any> = { size: 0, finalizedAt, ...conceptFilters }
+if (sf.length) Object.assign(params, filters2params(sf))
+const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
+```
+
+> **Ne pas confondre** avec la convention « objet plat » utilisée par app-dashboards
+> (`{ ...config.staticFilters }` spreadé tel quel dans les params REST), illustrée dans
+> `references/filters-url-convention.md`. Le pattern array → `filters2params` est celui
+> des visus (carto-explore, treemap, list-details, calendar, charts…).
 
 ## Checklist de livraison
 

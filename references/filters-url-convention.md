@@ -164,6 +164,12 @@ const allFilters = computed(() => ({ ...config.staticFilters, ...conceptFilters.
 useFetch(() => datasetUrl.value + '/lines', { query: computed(() => ({ ...allFilters.value })) })
 ```
 
+> ⚠️ Ici `staticFilters` est un **objet plat** de clés REST déjà suffixées
+> (convention app-dashboards). Pour le pattern **array** des visus
+> (`staticFilters` = tableau `{ type, field, ... }`), convertir avec `filters2params`
+> de `@data-fair/lib-utils/filters` — voir `SKILL.md`, section
+> « Filtres statiques prédéfinis (`staticFilters`) ».
+
 Prérequis :
 - `<meta name="df:filter-concepts" content="true">` dans `index.html` pour
   recevoir les filtres par concepts d'un parent (dashboard, portail).

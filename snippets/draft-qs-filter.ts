@@ -1,47 +1,27 @@
-import { watch } from 'vue'
-import { filters2qs } from '@data-fair/lib-utils/filters'
-import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Synchroniser des filtres internes (staticFilters) vers DataFair en mode draft
+// ⚠️ DÉPRÉCIÉ — Synchroniser les filtres statiques vers DataFair en mode draft
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Quand une app définit des filtres statiques internes (ex: filtres par défaut
-// ou filtres calculés), il est utile de les refléter dans le formulaire de
-// configuration DataFair pour que l'utilisateur puisse les voir/modifier.
+// ❌ Ancien mécanisme (abandonné) : on calculait un `qsFilter` à partir des
+// `staticFilters` et on le poussait vers le parent via postMessage, pour que
+// l'utilisateur voie le filtre effectif dans le formulaire de config.
 
-// On calcule un `qsFilter` à partir des `staticFilters` et on le pousse vers
-// le parent via postMessage en mode draft.
+// ✅ Nouvelle approche : les `staticFilters` sont la SEULE source de vérité.
+// - Le champ de config `qsFilter` est obsolète : à retirer des schémas d'app.
+// - Plus de conversion en `qs` : les filtres statiques se transmettent via les
+//   params REST suffixés (_in, _nin, _gte, _lte, _starts, _exists, _nexists)
+//   produits par `filters2params` (@data-fair/lib-utils/filters).
+// - En mode draft, les staticFilters sont directement éditables dans le formulaire
+//   (champ de config classique) : aucun push « dérivé » n'est nécessaire.
 //
-// ⚠️ `staticFilters` / `qsFilter` sont des conventions APPLICATIVES (noms de
-// champs de config choisis par l'app) — pas un contrat DataFair. Seul le
-// paramètre `qs` des requêtes datasets (syntaxe Lucene query_string) est
-// contractuel côté API.
+// Seul le paramètre `qs` des requêtes datasets (syntaxe Lucene query_string) reste
+// contractuel côté API, réservé aux logiques de filtrage complexes.
 
-function notifyConfigChange (field: string, value: unknown) {
-  if (window.parent !== window) {
-    window.parent.postMessage({ type: 'set-config', content: { field, value } }, '*')
-  }
-}
+import { filters2params } from '@data-fair/lib-utils/filters/index.js'
+import { normalizeStaticFilters } from '@/utils/staticFilters'
 
-watch(() => config.value?.staticFilters, (staticFilters) => {
-  // Uniquement en mode draft (l'utilisateur configure l'app)
-  if (reactiveSearchParams.draft !== 'true') return
-  if (!staticFilters?.length) return
-
-  const qsFilter = filters2qs(staticFilters)
-
-  // Éviter les boucles infinies : ne pas renvoyer si la valeur n'a pas changé
-  if (!qsFilter && !config.value?.qsFilter) return
-  if (qsFilter === config.value?.qsFilter) return
-
-  notifyConfigChange('qsFilter', qsFilter)
-}, { immediate: true, deep: true })
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Variante : signaler une erreur de config au parent (DataFair)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// Voir snippets/report-config-error.ts — endpoint POST {href}/error,
-// réservé au mode draft (permission writeConfig requise, 403 sinon,
-// échec à toujours catcher).
+// Exemple du nouveau flux, sans postMessage :
+const params: Record<string, any> = { size: 0, finalizedAt }
+const sf = normalizeStaticFilters(config.value?.staticFilters as any)
+if (sf.length) Object.assign(params, filters2params(sf as any))
+// puis useFetch(() => datasetUrl + '/lines', { query: params })

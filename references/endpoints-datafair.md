@@ -225,6 +225,12 @@ Le format `qs` est un raccourci pour construire des filtres complexes en une seu
 const qs = 'departement:75,population:>10000,status:actif,publie'
 ```
 
+> **Ne plus utiliser `qs` pour les filtres statiques prédéfinis** (`staticFilters`).
+> Ceux-ci se convertissent en params REST suffixés via `filters2params` de
+> `@data-fair/lib-utils/filters` (types `in`, `out`, `interval`, `starts`, `exists`,
+> `notExists`). Voir la section « Filtres statiques prédéfinis (`staticFilters`) »
+> dans `SKILL.md`.
+
 ### Recommandation
 
 - **Toujours privilégier les suffixes de filtres** (`_eq`, `_in`, `_gt`, etc.) pour tous les cas simples
@@ -237,6 +243,11 @@ Fusionner les filtres statiques (`config.staticFilters`) avec les filtres de
 concepts reçus du parent avant d'appeler les endpoints. Voir
 `references/filters-url-convention.md` pour la convention complète
 (`_c_<conceptId>_<op>` / `_d_<datasetId>_<field>_<op>`).
+
+> ⚠️ L'exemple ci-dessous illustre la convention **objet plat** de app-dashboards
+> (`staticFilters` = objet de clés REST déjà suffixées). Le pattern **array** des
+> visus (`staticFilters` = tableau `{ type, field, ... }`) se convertit avec
+> `filters2params` — voir `SKILL.md` section « Filtres statiques prédéfinis ».
 
 ```ts
 import { useConceptFilters } from '@data-fair/lib-vue/concept-filters.js'
