@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import 'vuetify/styles'
+import '@data-fair/lib-vuetify/style/global.scss'
 import { createVuetify } from 'vuetify'
 import { createI18n } from 'vue-i18n'
 import { createSession } from '@data-fair/lib-vue/session.js'
@@ -19,20 +20,21 @@ import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
 // À mettre au niveau module, AVANT createApp().
 ;(window as any).vIframeOptions = { reactiveParams: reactiveSearchParams }
 
-// createI18n DOIT être créé au niveau module (pas dans init()) :
-// plusieurs composants de @data-fair/lib-vuetify (ui-notif, colors-preview,
-// layout-empty-state, layout-fetch-error, ...) appellent useI18n() à
-// l'évaluation du module. Si la création est différée, ces modules reçoivent
-// une instance i18n non initialisée et les traductions de la lib ne
-// fonctionnent pas (snackbar, empty state, page d'erreur).
-// On initialise avec une locale par défaut et on ajuste depuis la session
-// une fois qu'elle est chargée.
-const i18n = createI18n({ legacy: false, locale: 'fr', fallbackLocale: 'en' })
-
 async function init () {
+  // siteInfo: true est obligatoire — vuetifySessionOptions lève sans session.site.value
   const session = await createSession({ directoryUrl: '/simple-directory', siteInfo: true })
-  // Mise à jour de la locale dès que la session est connue
-  i18n.global.locale.value = session.lang.value
+
+  // createI18n APRÈS la session, avec la locale définitive.
+  // - useI18n() ne s'exécute que dans un setup(), donc aucune raison de créer
+  //   l'instance au niveau module ; il suffit de app.use(i18n) avant mount().
+  // - legacy: false → vue-i18n 11 démarre sinon en mode legacy, déprécié et
+  //   retiré en v12.
+  // - fallbackLocale: 'en' → le défaut est la valeur de locale, donc aucun repli.
+  //   simple-directory sert fr/en/es/pt/it/de, les blocs <i18n> de lib-vuetify
+  //   n'ont que fr et en : sans repli, une session de affiche les clés brutes.
+  // - ne JAMAIS réassigner i18n.global.locale.value : en legacy c'est une string
+  //   (TypeError), et c'est inutile car un changement de langue recharge la page.
+  const i18n = createI18n({ legacy: false, locale: session.lang.value, fallbackLocale: 'en' })
 
   const vuetify = createVuetify({
     ...vuetifySessionOptions(session),

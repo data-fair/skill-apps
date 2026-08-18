@@ -274,7 +274,7 @@ Ne pas conserver de dépendance à `iframe-resizer` dans le code de l'app : la m
 4. [ ] Remplacer axios par useFetch
 5. [ ] Implémenter createConfig
 6. [ ] Implémenter reactiveSearchParams
-7. [ ] Implémenter theme dynamique (session)
+7. [ ] Implémenter le thème dynamique (session) : `vuetifySessionOptions`, `<link>` vers `_theme.css`, déclaration `@layer`, et les quatre thèmes `default` / `dark` / `hc` / `hc-dark`
 8. [ ] Tester le mode draft (postMessage)
 9. [ ] Tester les filtres et la réactivité URL
 10. [ ] `npm run build` + `npm run type-check` + `npm run lint`

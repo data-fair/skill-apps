@@ -7,8 +7,9 @@ description: |
   Utiliser aussi lorsqu'il est question de createConfig, useFetch, reactiveSearchParams,
   window.APPLICATION, config-schema.json, df-dev-server, d-frame, d'intégration iframe DataFair,
   de la configuration (.dev-config.json), du contenu d'index.html et de ses métas
-  (application-name, df:sync-state, df:vjsf, df:capture-delay), ou de l'accessibilité RGAA
-  d'une visualisation.
+  (application-name, df:sync-state, df:vjsf, df:capture-delay), du thème dynamique
+  (vuetifySessionOptions, _theme.css, mode sombre, contraste renforcé), de l'internationalisation
+  (createI18n, vue-i18n, locale de session), ou de l'accessibilité RGAA d'une visualisation.
 ---
 
 # Skill Apps – DataFair Applications
@@ -113,6 +114,9 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <style>@layer vuetify-core, vuetify-components, vuetify-overrides, vuetify-utilities, vuetify-final;</style>
+    <link href="/simple-directory/api/sites/_theme.css" rel="stylesheet">
+
     <title>Charts</title>
 
     <!-- contrat data-fair, lu à l'exécution -->
@@ -134,11 +138,12 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 </html>
 ```
 
-Quatre points de ce squelette ne se devinent pas :
+Cinq points de ce squelette ne se devinent pas :
 
-- **Pas d'attribut `lang` sur `<html>`.** Le proxy filtre l'attribut déclaré puis le repose depuis la locale de la requête (`api/src/applications/proxy.ts`). Conserver le commentaire : sans lui, un agent qui régénère le fichier remettra `lang="fr"`, que tous les linters HTML réclament.
+- **Pas d'attribut `lang` sur `<html>`.** Le proxy filtre l'attribut déclaré puis le repose depuis la locale de la requête (`api/src/applications/proxy.ts`). Conserver le commentaire : sans lui, un agent qui régénère le fichier remettra `lang="fr"`, que tous les linters HTML réclament. **Limite connue** : le `lang` du document et la locale de l'interface sont résolus indépendamment et peuvent diverger — voir `references/accessibility-rgaa.md`. Rien à corriger côté application.
 - **`<meta charset>` en premier**, dans les 1024 premiers octets — un bloc de commentaire placé avant suffit à le repousser et à casser la validation.
 - **Un seul `<title>` et une seule `<meta name="description">`.** Les dupliquer avec un attribut `lang` pour porter l'i18n est invalide en HTML et produit deux erreurs W3C. L'i18n du catalogue passera par registry, qui porte `title` et `description` en objets `{ en, fr }`.
+- **Le `<link>` vers `_theme.css` et la déclaration `@layer`.** `/simple-directory/api/sites/_theme.css` apporte ce que `vuetifySessionOptions` ne calcule pas : les variantes de couleurs **texte à contraste corrigé** (`.text-primary`, `.text-secondary`, ... en `!important`, distinctes des couleurs brutes du thème), les couleurs de `a.simple-link` selon le thème et le fond, les `@font-face` du site et une règle `@media print`. Le chemin est absolu et sans hash : les placeholders `{SITE_PATH}` / `{THEME_CSS_HASH}` qu'utilisent les services relèvent de `serve-spa`, et le proxy data-fair ne substitue que `%APPLICATION%` — sans hash le CSS est simplement revalidé toutes les 60 s au lieu d'être mis en cache immuable, les deux routes existent côté simple-directory. La déclaration `@layer` vient avant tout style parce que Vuetify 4 livre son CSS dans des couches en cascade (`vuetify-core`, `vuetify-components`, `vuetify-final`...) : avec `@layer`, la priorité est fixée par l'**ordre de première déclaration des noms**, pas par l'ordre des règles. Sans cette ligne, cet ordre dépend du chunk CSS qui se charge en premier — instable entre le dev et le build à cause du code splitting, donc une surcharge qui fonctionne en local peut cesser de fonctionner en production. La déclarer en tête épingle l'ordre et ouvre `vuetify-overrides` / `vuetify-utilities` comme emplacements pour vos propres styles. `_theme.css`, lui, est volontairement hors couche : du CSS non layered l'emporte sur tout CSS layered, quel que soit l'ordre.
 - **`<main id="app">` et non `<div id="app">`** — cf. `references/accessibility-rgaa.md`.
 
 #### `<title>` et `meta name="title"` : deux choses différentes
@@ -147,7 +152,9 @@ Quatre points de ce squelette ne se devinent pas :
 
 Les deux alimentent `meta.title`, mais **`meta name="title"` écrase la valeur issue de l'élément** : `meta.title` est posé depuis `<title>` puis réécrit par la boucle sur les métas, `title` étant aussi une clé de `metasByName` (`base-applications/service.ts`). Une brique qui déclare les deux n'utilise donc pas son `<title>` comme métadonnée.
 
-**Convention retenue** : on abandonne `meta name="title"`. `<title>` porte le nom anglais du modèle (`Charts`, `Dashboards`, `Treemap`). Le titre du document servi à l'utilisateur sera posé par le proxy depuis le titre de la visualisation, comme il le fait pour `lang` — aucun `document.title` à écrire dans l'application.
+**Convention retenue** : on abandonne `meta name="title"`. `<title>` porte le nom anglais du modèle (`Charts`, `Dashboards`, `Treemap`).
+
+Ce `<title>` remplit **deux rôles à la fois** : libellé du modèle au catalogue DataFair, **et** titre du document réellement servi. Contrairement à `lang`, le proxy ne le réécrit pas — vérifié en production, une visualisation « Graphiques divers » sert un document intitulé `data-fair-charts` parce que son `index.html` le déclare ainsi. C'est donc ce que lisent l'onglet du navigateur et les technologies d'assistance : un nom de modèle lisible, jamais un slug de paquet ni le nom du dépôt. Poser le titre de la visualisation à la place reste un TODO côté data-fair ; en attendant, aucun `document.title` à écrire dans l'application.
 
 #### `application-name` : la clé d'identité, pas un libellé
 
@@ -244,24 +251,25 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 | `snippets/schema-xexports.ts` | Génération de types TypeScript (`x-exports`) |
 | `snippets/schema-color.ts` | Couleurs (string hex + pattern thème/custom, piège `format: "hexcolor"`) |
 
-> **⚠️ Attention : `createSession` est asynchrone**
-> `createSession({ siteInfo: true })` fetch les infos du site (thème, couleurs, locale) via API. Il **doit être `await`** avant d'appeler `vuetifySessionOptions(session)`. Ne jamais appeler `createSession` de manière synchrone en dehors d'une fonction `async`.
+> **⚠️ Attention : `createSession` est asynchrone, et `siteInfo` n'est pas optionnel**
+> `createSession({ siteInfo: true })` fetch les infos du site (thème, couleurs, locale) via API. Il **doit être `await`** avant d'appeler `vuetifySessionOptions(session)`, qui lève `vuetifySessionOptions requires fetching site info in session util` si `session.site.value` est nul. Ne jamais appeler `createSession` de manière synchrone en dehors d'une fonction `async`.
+> À noter : la lib marque `refreshSiteInfo` — ce que déclenche `siteInfo: true` — comme déprécié. La voie moderne, celle des services, est de laisser simple-directory injecter `window.__PUBLIC_SITE_INFO` en ajoutant `<script src="/simple-directory/api/sites/_public.js"></script>` dans `index.html` ; la session le lit alors sans fetch bloquant. Comme pour `_theme.css`, le chemin est absolu et sans hash.
 
-> **⚠️ Attention : `createI18n` doit être créé au niveau module, pas dans `init()`**
-> Plusieurs composants de `@data-fair/lib-vuetify` (`ui-notif`, `colors-preview`, `layout-empty-state`, `layout-fetch-error`, ...) appellent `useI18n()` **à l'évaluation du module** (`const { t } = useI18n()` en top-level du fichier compilé). Si `createI18n` est créé dans `init()` (donc après ces imports), ces modules reçoivent une instance i18n non initialisée et les traductions de la lib ne fonctionnent pas (snackbar, empty state, page d'erreur).
-> **Pattern correct** :
+> **⚠️ Attention : créer `createI18n` après la session, et ne jamais réassigner la locale**
+> `useI18n()` commence par `getCurrentInstance()` et lève `MUST_BE_CALL_SETUP_TOP` sinon : il ne peut s'exécuter que dans un `setup()`. Dans un `<script setup>`, le code de premier niveau **est** le corps de `setup()`, évalué à l'instanciation du composant et non à l'import — les composants de `@data-fair/lib-vuetify` n'imposent donc aucune création au niveau module. La seule contrainte réelle est `app.use(i18n)` avant `.mount()`.
+> **Pattern correct**, celui des services (`catalogs`, `processings`, `metrics`, `events`) :
 > ```ts
-> // Au niveau module, AVANT init() et AVANT createApp()
-> const i18n = createI18n({ locale: 'fr', fallbackLocale: 'en' })
->
 > async function init () {
->   const session = await createSession(...)
->   i18n.global.locale.value = session.lang.value  // ajustement async
+>   const session = await createSession({ directoryUrl: '/simple-directory', siteInfo: true })
+>   const i18n = createI18n({ legacy: false, locale: session.lang.value, fallbackLocale: 'en' })
 >   const app = createApp(App)
 >   app.use(i18n)
 >   ...
 > }
 > ```
+> - **`legacy: false`** — sans lui, vue-i18n 11 démarre en mode legacy : déprécié, retiré en v12, et un avertissement s'affiche dans la console de dev.
+> - **`fallbackLocale: 'en'`** — le défaut de `fallbackLocale` est la valeur de `locale`, donc *aucun repli*. simple-directory sert six langues (`fr, en, es, pt, it, de`) alors que les blocs `<i18n>` de `lib-vuetify` n'ont que `fr` et `en` : sans repli, une session `de` affiche les clés brutes (`noResult` au lieu de « Aucun résultat »).
+> - **Ne jamais écrire `i18n.global.locale.value = ...`** — en mode legacy `i18n.global.locale` est une string, et l'assignation lève `TypeError: Cannot create property 'value' on string`. C'est de toute façon inutile : un changement de langue ou de thème recharge le document (`session.ts`, `watch(() => state.lang, () => goTo(null))`).
 > Voir `snippets/main.ts` pour le bootstrap complet.
 
 ## Structure de projet type
@@ -297,6 +305,19 @@ my-visu/
 DataFair utilise [VJSF](https://koumoul-dev.github.io/vuetify-jsonschema-form/) v3 pour générer le formulaire de configuration à partir du fichier `public/config-schema.json`. Le fichier source est `src/config/schema.json` et il est traité par `df-build-types` pour générer à la fois les types TypeScript et le schéma résolu copié dans `public/`.
 
 > **Note** : `df-build-types` est fourni par le package **`@data-fair/lib-types-builder`** (à installer en `devDependencies`).
+
+### Libellés : majuscule initiale, casse de phrase
+
+Tout libellé visible par l'utilisateur commence par une **majuscule** : `title` et `description` de chaque champ, libellés des options d'un `enum` ou d'un `oneOf`, textes de boutons, empty states, messages d'erreur et infobulles. `"catégorie"` et `"ajouter un champ"` sont des défauts de finition, au même titre qu'une faute d'orthographe — et ils sont très visibles, un formulaire de configuration n'étant qu'une colonne de libellés.
+
+La règle est la **casse de phrase** française, pas la casse de titre à l'anglaise : seule l'initiale prend la majuscule, le reste du libellé reste en minuscules. « Somme des valeurs d'un champ », jamais « Somme des Valeurs d'un Champ ».
+
+Deux exceptions, et deux seulement :
+
+- les **identifiants techniques** rendus tels quels gardent leur casse d'origine (`h1`, `h2`, un nom de champ du dataset, un code de projection) ;
+- les **noms propres** et marques (`OpenStreetMap`, `GeoJSON`).
+
+La règle porte sur **toute chaîne visible par l'utilisateur, où qu'elle vive** — et pas seulement sur celles qui sont déjà internationalisées. Dans l'état actuel du parc l'immense majorité des textes sont des chaînes françaises en dur dans les templates : ce sont elles qui s'affichent aujourd'hui, elles sont donc concernées au premier chef. Ne pas attendre un passage à l'i18n pour appliquer la casse, et quand des blocs `<i18n>` existent, la majuscule est portée dans chaque langue, pas seulement en français.
 
 ### Pipeline de build
 
@@ -526,7 +547,11 @@ Deux patterns selon le besoin :
   - En réception, utiliser `useConceptFilters(reactiveSearchParams, datasetId)` (`@data-fair/lib-vue/concept-filters.js`) pour extraire les filtres `_c_*` et dé-préfixer les `_d_<datasetId>_*` de votre dataset.
   - Une sélection émise (clic) = filtre `_c_`/`_d_` + marqueur `_s_<cible>=app_<id>` : l'app source s'auto-exclut, les autres appliquent le filtre. Voir le mode sélection `_s_` dans `references/filters-url-convention.md`.
   - Voir `references/filters-url-convention.md`.
-- **Thème dynamique** : sombre/clair fonctionne via `vuetifySessionOptions(session)`.
+- **Thème dynamique** : `vuetifySessionOptions(session)` couvre **quatre** thèmes et non deux — `default`, `dark`, `hc`, `hc-dark` — résolus par `resolveTheme` depuis les réglages du site, le cookie `theme` de l'utilisateur, `prefers-color-scheme` **et** `prefers-contrast`. Le contraste renforcé fait partie du contrat, pas seulement le mode sombre.
+  - Compléter par `import '@data-fair/lib-vuetify/style/global.scss'` dans `main.ts` et par le `<link>` vers `_theme.css` dans `index.html` (cf. section index.html).
+  - Pour du **texte**, utiliser `text-primary` / `text-secondary` plutôt que `primary` / `secondary` : ce sont les variantes dont `_theme.css` garantit le contraste sur le fond du site.
+  - Rien à coder pour le multi-site : le document est servi depuis l'origine du portail, donc `_theme.css` et les infos de site sont résolus sur cette origine. Une même configuration d'application rend aux couleurs de chaque portail qui l'embarque, vérifié en production.
+  - **Limite connue** : la police du site n'est pas appliquée. `_theme.css` livre bien les `@font-face`, mais rien ne pose `bodyFontFamily` sur le `body` de la visualisation — un portail en typo personnalisée affiche ses visualisations en Roboto.
 
 ### HTTP
 
@@ -610,6 +635,28 @@ Les cinq points qui reviennent sur tout le parc :
 | Séries distinguables autrement que par la couleur, ratios ≥ 3:1 — y compris dans les palettes par défaut du schéma de config | 3.1, 3.3 |
 
 Un rendu **SVG** satisfait gratuitement le critère 10.4 et se rend accessible sur place, contrairement à un canvas. À prendre en compte au moment de choisir une bibliothèque de graphiques.
+
+### Internationalisation
+
+Aucune application du parc ne traduit ses propres textes : `createI18n` n'y sert qu'à faire fonctionner les composants de `@data-fair/lib-vuetify`. Pour rendre une visualisation réellement bilingue, reprendre le pattern des services plutôt que d'inventer un mécanisme.
+
+**Un bloc `<i18n>` par composant**, pas de dossier `locales/` central :
+
+```vue
+<i18n lang="yaml">
+fr:
+  noResult: Aucun résultat
+en:
+  noResult: No result
+</i18n>
+```
+
+puis `const { t } = useI18n({ useScope: 'local' })` dans le `<script setup>`.
+
+- **Activer le plugin de compilation** dans `vite.config.ts` : `import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'`, puis `VueI18nPlugin()` dans `plugins`. Sans lui les blocs `<i18n>` ne sont pas compilés. Plusieurs applications l'ont déjà installé sans s'en servir — vérifier avant de l'ajouter.
+- **Dates et durées** : `createLocaleDayjs(session.lang.value)` puis `useLocaleDayjs()`, cf. `snippets/locale-dayjs.ts`.
+- **Ne pas porter l'i18n du catalogue dans `index.html`** (un seul `<title>`, une seule `<meta name="description">`) : elle passera par registry, qui porte `title` et `description` en objets `{ en, fr }`.
+- **Casse des libellés** : la règle de majuscule initiale s'applique à toutes les chaînes visibles, traduites ou en dur — voir « Libellés : majuscule initiale, casse de phrase » dans la section VJSF.
 
 ### États de chargement et d'erreur (UX)
 
@@ -890,8 +937,9 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] `npm run type-check` passe (TS strict)
 - [ ] `npm run lint` passe
 - [ ] `public/config-schema.json` est généré et à jour
+- [ ] tous les libellés visibles commencent par une majuscule — `title`, `description`, options d'`enum` / `oneOf`, boutons, empty states, messages d'erreur, **y compris les chaînes en dur dans les templates**
 - [ ] `public/thumbnail.png` est présent
-- [ ] `index.html` : pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>`, une seule `<meta name="description">`, `<main id="app">`
+- [ ] `index.html` : pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>` lisible, une seule `<meta name="description">`, `<main id="app">`, `<link>` vers `_theme.css` et déclaration `@layer`
 - [ ] `application-name` = nom du dépôt = nom du paquet, en `[a-z0-9-]`
 - [ ] aucune méta morte (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`)
 - [ ] accessibilité : checklist de `references/accessibility-rgaa.md` passée
@@ -899,7 +947,8 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] Réactivité query params OK
 - [ ] Réactivité config draft OK (test mode draft dans DataFair)
 - [ ] État utilisateur dans l'URL
-- [ ] Thème dynamique sombre/clair OK
+- [ ] Thème dynamique OK : clair, sombre **et** contraste renforcé (`hc`, `hc-dark`)
+- [ ] `createI18n` créé après la session, avec `legacy: false` et `fallbackLocale: 'en'`, sans réassignation de `i18n.global.locale`
 - [ ] Erreurs de config affichées (pas de crash)
 - [ ] Layout responsive
 

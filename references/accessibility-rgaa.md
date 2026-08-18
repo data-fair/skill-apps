@@ -27,11 +27,22 @@ Ne pas déclarer `lang` sur `<html>`. Le proxy DataFair filtre l'attribut décla
 
 Le validateur W3C émettra un avertissement « Consider adding a lang attribute » : c'est attendu, il porte sur la source et non sur le document servi.
 
+**Limite connue, rien à corriger côté application.** Le `lang` du document et la locale de l'interface sont résolus par deux mécanismes indépendants, qui divergent :
+
+- le proxy pose `req.getLocale()`, négocié depuis l'en-tête `Accept-Language` sur les locales de data-fair (`fr, en`) ;
+- l'application rend dans `session.state.lang`, lu depuis le cookie `i18n_lang` avec `fr` par défaut, sans regarder `Accept-Language`.
+
+Constaté en production : sur un navigateur en `en-US` sans cookie, le document est servi `lang="en"` alors que l'interface est en français ; avec `i18n_lang=de`, le document est servi `lang="fr"` (locale non supportée par data-fair) alors que l'interface passe en allemand. Sur un même site, le portail peut déclarer `fr` et la visualisation qu'il embarque `en`.
+
+C'est un échec 8.3 / 8.4 réel, mais il se corrige dans data-fair ou simple-directory, jamais dans l'application. Ne surtout pas « réparer » en remettant un `lang` en dur ou en forçant une locale : cela casserait aussi les cas où les deux coïncident.
+
 ## Titre du document — critères 8.5, 8.6
 
 Le `<title>` statique est identique pour toutes les visualisations d'une même brique — un lecteur d'écran annonce donc le même titre sur des dizaines de pages différentes.
 
-Le titre du document servi sera posé par le proxy depuis le titre de la visualisation, comme il le fait pour `lang`. Rien à faire côté application, aucun appel à `document.title` à ajouter.
+Contrairement à `lang`, **le proxy ne réécrit pas le titre** : aucune branche de data-fair n'implémente cette injection, seul l'en-tête `x-resource` transporte le titre de la ressource. Le `<title>` déclaré dans `index.html` est donc bien celui qu'annoncent l'onglet et les technologies d'assistance — vérifié en production, une visualisation « Graphiques divers » est servie sous le titre `data-fair-charts`.
+
+En attendant que le titre de la visualisation soit posé côté proxy, le `<title>` doit au minimum être un nom de modèle lisible anglais (`Charts`, `Dashboards`, `Treemap`) et jamais un slug de paquet ni le nom du dépôt. Toujours aucun appel à `document.title` à ajouter dans l'application.
 
 ## Validité du code source — critère 8.2
 
@@ -182,7 +193,7 @@ Ce que `axe-core` ne voit pas et qui doit être testé à la main : tout ce qui 
 
 - [ ] pas d'attribut `lang` sur `<html>`
 - [ ] `<meta charset>` en premier dans `<head>`
-- [ ] un seul `<title>`, une seule `<meta name="description">`
+- [ ] un seul `<title>`, lisible (nom du modèle, pas un slug), et une seule `<meta name="description">`
 - [ ] `<main id="app">` et non `<div id="app">`
 - [ ] nom accessible sur chaque canvas ou svg porteur d'information
 - [ ] tableau de données équivalent accessible depuis la visualisation
