@@ -37,8 +37,17 @@ async function setupTheme () {
 // les placeholders {SITE_PATH} / {THEME_CSS_HASH} des services sont inaccessibles ici.
 // Sans hash, le CSS est revalidé toutes les 60 s au lieu d'être immuable.
 
-// Et dans main.ts, importer les styles globaux de la lib :
+// Et dans main.ts, importer les styles globaux de la lib À LA PLACE de
+// 'vuetify/styles' — jamais les deux, sinon le CSS Vuetify est chargé en double
+// et la police du site n'est pas appliquée (rendu en Roboto) :
 // import '@data-fair/lib-vuetify/style/global.scss'
+// (nécessite sass-embedded en devDependencies)
+//
+// Et dans vite.config, le configFile doit être celui de la lib, pas un fichier local :
+// import { settingsPath } from '@data-fair/lib-vuetify/vite.js'
+// Vuetify({ autoImport: true, styles: { configFile: settingsPath } })
+// Vérification : le CSS buildé doit contenir font-family:var(--d-body-font-family)
+// et non Roboto.
 
 // Alternative non dépréciée à siteInfo: true — laisser simple-directory injecter
 // window.__PUBLIC_SITE_INFO, ce que fait chaque service, en ajoutant dans index.html :

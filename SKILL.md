@@ -28,7 +28,10 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
 - Vuetify 4 avec `vite-plugin-vuetify`
 - Vite 8
 - TypeScript strict
-- `@data-fair/lib-vue` / `@data-fair/lib-vuetify` / `@data-fair/lib-utils`
+- `@data-fair/lib-vuetify` **2.x** — c'est la ligne Vuetify 4 (`peerDependencies: { vuetify: "4" }`) ; la 1.x est la ligne Vuetify 3 et n'est pas compatible
+- `@data-fair/lib-vue` **≥ 1.15** (peer de lib-vuetify 2.x) / `@data-fair/lib-utils`
+
+> Tout ce que ce skill décrit du thème suppose ces versions : les cascade layers `vuetify-*` sont propres à Vuetify 4, le reset CSS de `global.scss` est arrivé en lib-vuetify 2.0.3, et la résolution des quatre thèmes (`default`, `dark`, `hc`, `hc-dark`) en lib-vue 1.14. Sur une reprise, vérifier ces versions avant d'appliquer les conseils de la section thème.
 - Dev server : `df-dev-server` + Zellij layout `.zellij.kdl`
 
 ## Scripts obligatoires dans package.json
@@ -550,10 +553,14 @@ Deux patterns selon le besoin :
   - Une sélection émise (clic) = filtre `_c_`/`_d_` + marqueur `_s_<cible>=app_<id>` : l'app source s'auto-exclut, les autres appliquent le filtre. Voir le mode sélection `_s_` dans `references/filters-url-convention.md`.
   - Voir `references/filters-url-convention.md`.
 - **Thème dynamique** : `vuetifySessionOptions(session)` couvre **quatre** thèmes et non deux — `default`, `dark`, `hc`, `hc-dark` — résolus par `resolveTheme` depuis les réglages du site, le cookie `theme` de l'utilisateur, `prefers-color-scheme` **et** `prefers-contrast`. Le contraste renforcé fait partie du contrat, pas seulement le mode sombre.
-  - Compléter par `import '@data-fair/lib-vuetify/style/global.scss'` dans `main.ts` et par le `<link>` vers `_theme.css` dans `index.html` (cf. section index.html).
+  - Le câblage de la police du site tient en **deux points, tous les deux nécessaires** :
+    1. dans `vite.config`, `Vuetify({ styles: { configFile: settingsPath } })` avec `import { settingsPath } from '@data-fair/lib-vuetify/vite.js'` — jamais un `src/styles/settings.scss` local, qui ne déclare pas les variables de police ;
+    2. dans `main.ts`, `import '@data-fair/lib-vuetify/style/global.scss'` **à la place de** `'vuetify/styles'`, jamais les deux.
+
+    Les deux fichiers de la lib posent `$body-font-family: var(--d-body-font-family)`, la variable que `_theme.css` définit (`:root { --d-body-font-family: … !important }`). Il faut `sass-embedded` en `devDependencies`.
   - Pour du **texte**, utiliser `text-primary` / `text-secondary` plutôt que `primary` / `secondary` : ce sont les variantes dont `_theme.css` garantit le contraste sur le fond du site.
   - Rien à coder pour le multi-site : le document est servi depuis l'origine du portail, donc `_theme.css` et les infos de site sont résolus sur cette origine. Une même configuration d'application rend aux couleurs de chaque portail qui l'embarque, vérifié en production.
-  - **Limite connue** : la police du site n'est pas appliquée. `_theme.css` livre bien les `@font-face`, mais rien ne pose `bodyFontFamily` sur le `body` de la visualisation — un portail en typo personnalisée affiche ses visualisations en Roboto.
+  - **Piège de la police du site** : avec `'vuetify/styles'`, les `@font-face` du site sont chargées et `--d-body-font-family` est définie, mais rien ne les consomme — la visualisation rend en Roboto dans un portail en typo personnalisée, constaté en production. C'est le symptôme d'un `global.scss` manquant, pas d'un manque côté serveur.
 
 ### HTTP
 
@@ -950,6 +957,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] Réactivité config draft OK (test mode draft dans DataFair)
 - [ ] État utilisateur dans l'URL
 - [ ] Thème dynamique OK : clair, sombre **et** contraste renforcé (`hc`, `hc-dark`)
+- [ ] police du site câblée : `settingsPath` de `@data-fair/lib-vuetify/vite.js` en `configFile`, et `main.ts` qui importe `@data-fair/lib-vuetify/style/global.scss` et **pas** `vuetify/styles`
 - [ ] `createI18n` créé après la session, avec `legacy: false` et `fallbackLocale: 'en'`, sans réassignation de `i18n.global.locale`
 - [ ] Erreurs de config affichées (pas de crash)
 - [ ] Layout responsive

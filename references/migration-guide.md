@@ -96,13 +96,7 @@ Voir la section dédiée "HTTP" plus bas pour les détails sur `useFetch`.
 
 1. Désinstaller : `npm uninstall @nuxtjs/vuetify`
 2. Installer : `npm install vuetify@^4.0.0 vite-plugin-vuetify@^2.0.0`
-3. Créer `src/styles/settings.scss` :
-
-```scss
-@use 'vuetify/settings' with (
-  $color-pack: false
-);
-```
+3. Ne **pas** créer de `src/styles/settings.scss` local : utiliser celui de la lib, qui câble les variables de police du thème DataFair (`$body-font-family: var(--d-body-font-family)`). Un fichier local qui ne les déclare pas fait rendre la visualisation en Roboto dans un portail à typo personnalisée.
 
 4. Créer `vite.config.mjs` :
 
@@ -110,11 +104,12 @@ Voir la section dédiée "HTTP" plus bas pour les détails sur `useFetch`.
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
+import { settingsPath } from '@data-fair/lib-vuetify/vite.js'
 
 export default defineConfig({
   plugins: [
     vue(),
-    vuetify({ autoImport: true, styles: { configFile: 'src/styles/settings.scss' } })
+    vuetify({ autoImport: true, styles: { configFile: settingsPath } })
   ],
   server: { port: 3000 }
 })

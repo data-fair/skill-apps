@@ -1,5 +1,8 @@
 import { createApp } from 'vue'
-import 'vuetify/styles'
+// global.scss REMPLACE 'vuetify/styles' — jamais les deux.
+// Il compile Vuetify avec $body-font-family: var(--d-body-font-family), variable
+// posée par _theme.css : c'est ce qui applique la police du site à la visualisation.
+// Nécessite sass-embedded en devDependencies.
 import '@data-fair/lib-vuetify/style/global.scss'
 import { createVuetify } from 'vuetify'
 import { createI18n } from 'vue-i18n'

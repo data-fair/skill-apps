@@ -32,9 +32,13 @@ Le validateur W3C émettra un avertissement « Consider adding a lang attribute 
 - le proxy pose `req.getLocale()`, négocié depuis l'en-tête `Accept-Language` sur les locales de data-fair (`fr, en`) ;
 - l'application rend dans `session.state.lang`, lu depuis le cookie `i18n_lang` avec `fr` par défaut, sans regarder `Accept-Language`.
 
-Constaté en production : sur un navigateur en `en-US` sans cookie, le document est servi `lang="en"` alors que l'interface est en français ; avec `i18n_lang=de`, le document est servi `lang="fr"` (locale non supportée par data-fair) alors que l'interface passe en allemand. Sur un même site, le portail peut déclarer `fr` et la visualisation qu'il embarque `en`.
+Constaté en production : sur un navigateur en `en-US` **sans cookie**, le document est servi `lang="en"` alors que l'interface est en français ; avec `i18n_lang=de`, le document est servi `lang="fr"` (locale non supportée par data-fair) alors que l'interface passe en allemand.
+
+Portée réelle : le portail pose lui-même le cookie `i18n_lang` (module i18n de Nuxt, `detectBrowserLanguage.useCookie`), donc **dans le parcours nominal — l'utilisateur arrive par le portail puis ouvre la visualisation — les deux convergent**, vérifié en production. La divergence concerne l'accès sans ce cookie : lien direct vers l'URL de la visualisation, embed sur un site tiers où le portail n'a jamais été visité ou où les cookies tiers sont bloqués, robot d'indexation.
 
 C'est un échec 8.3 / 8.4 réel, mais il se corrige dans data-fair ou simple-directory, jamais dans l'application. Ne surtout pas « réparer » en remettant un `lang` en dur ou en forçant une locale : cela casserait aussi les cas où les deux coïncident.
+
+Traduire les applications ne résout pas ce décalage : dans ce cas l'application rend en français parce que **sa locale de session vaut `fr`**, pas parce qu'elle manque de version anglaise. Une application entièrement traduite rendrait la même chose. En revanche la traduction change le correctif souhaitable : tant que les textes sont français en dur, seul l'alignement du proxy sur la règle de la session est tenable ; une fois les applications traduites, faire lire l'`Accept-Language` à la session devient la meilleure option, puisqu'un visiteur anglophone obtiendrait réellement l'anglais.
 
 ## Titre du document — critères 8.5, 8.6
 
@@ -53,11 +57,11 @@ Un seul `<title>` dans `<head>` et une seule `<meta name="description">` par doc
 
 Sur une migration ou une reprise, supprimer les doublons. L'i18n du catalogue passera par registry, qui porte `title` et `description` en objets `{ en, fr }`.
 
+Le proxy supprime **tous** les `<title>` déclarés avant de poser le sien, donc un doublon de titre ne survit pas dans le document servi. Ce n'est pas une raison de le laisser dans la source : la validation W3C porte sur le dépôt, et l'import au catalogue lit bien l'`index.html` d'origine — avec ses doublons, qu'il départage par `lang`.
+
 `<meta charset>` doit rester dans les **1024 premiers octets** du document : un bloc de commentaire placé avant suffit à le repousser et à provoquer une erreur.
 
 ## Rendu graphique — le gros morceau
-
-Le proxy supprime **tous** les `<title>` déclarés avant de poser le sien, donc un doublon de titre ne survit pas dans le document servi. Ce n'est pas une raison de le laisser dans la source : la validation W3C porte sur le dépôt, et l'import au catalogue lit bien l'`index.html` d'origine — avec ses doublons, qu'il départage par `lang`.
 
 C'est ici que se concentre l'essentiel des non-conformités. La difficulté dépend entièrement de la technologie de rendu.
 
