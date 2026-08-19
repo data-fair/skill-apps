@@ -117,7 +117,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
     <style>@layer vuetify-core, vuetify-components, vuetify-overrides, vuetify-utilities, vuetify-final;</style>
     <link href="/simple-directory/api/sites/_theme.css" rel="stylesheet">
 
-    <title>Charts</title>
+    <title>Charts</title><!-- nom du modèle : le proxy le remplace par le titre de l'application -->
 
     <!-- contrat data-fair, lu à l'exécution -->
     <meta name="df:vjsf" content="3">
@@ -148,13 +148,15 @@ Cinq points de ce squelette ne se devinent pas :
 
 #### `<title>` et `meta name="title"` : deux choses différentes
 
-`<title>` est le titre du document, pour l'utilisateur et les technologies d'assistance. `meta name="title"` est le libellé du modèle au catalogue DataFair.
+`<title>` est le titre du document au sens HTML — mais dans une brique DataFair il ne sert **pas** de titre à l'utilisateur final, le proxy le réécrivant (cf. plus bas). `meta name="title"` est le libellé du modèle au catalogue DataFair.
 
 Les deux alimentent `meta.title`, mais **`meta name="title"` écrase la valeur issue de l'élément** : `meta.title` est posé depuis `<title>` puis réécrit par la boucle sur les métas, `title` étant aussi une clé de `metasByName` (`base-applications/service.ts`). Une brique qui déclare les deux n'utilise donc pas son `<title>` comme métadonnée.
 
 **Convention retenue** : on abandonne `meta name="title"`. `<title>` porte le nom anglais du modèle (`Charts`, `Dashboards`, `Treemap`).
 
-Ce `<title>` remplit **deux rôles à la fois** : libellé du modèle au catalogue DataFair, **et** titre du document réellement servi. Contrairement à `lang`, le proxy ne le réécrit pas — vérifié en production, une visualisation « Graphiques divers » sert un document intitulé `data-fair-charts` parce que son `index.html` le déclare ainsi. C'est donc ce que lisent l'onglet du navigateur et les technologies d'assistance : un nom de modèle lisible, jamais un slug de paquet ni le nom du dépôt. Poser le titre de la visualisation à la place reste un TODO côté data-fair ; en attendant, aucun `document.title` à écrire dans l'application.
+Ce `<title>` n'a qu'un rôle : **libellé du modèle au catalogue DataFair**. Comme `lang`, il est réécrit par le proxy, qui le remplace par le titre de l'application servie (`api/src/applications/proxy.ts`) — et l'insère si la brique n'en déclare pas. Une visualisation « Graphiques divers » sert donc un document intitulé « Graphiques divers », et non plus `data-fair-charts` : c'est ce que lisent l'onglet du navigateur, l'historique, les favoris et les technologies d'assistance quand l'application est ouverte seule plutôt qu'embarquée dans un portail (WCAG 2.4.2 / RGAA 8.6).
+
+Le catalogue n'est pas affecté par cette réécriture : les métadonnées de brique sont lues sur l'`index.html` récupéré **directement** à l'URL de la brique (`base-applications/service.ts`), jamais à travers le proxy. Rien à faire côté application : pas de `document.title` à écrire, et le `<title>` du dépôt reste le nom anglais du modèle.
 
 #### `application-name` : la clé d'identité, pas un libellé
 

@@ -38,11 +38,11 @@ C'est un échec 8.3 / 8.4 réel, mais il se corrige dans data-fair ou simple-dir
 
 ## Titre du document — critères 8.5, 8.6
 
-Le `<title>` statique est identique pour toutes les visualisations d'une même brique — un lecteur d'écran annonce donc le même titre sur des dizaines de pages différentes.
+Le `<title>` déclaré dans `index.html` est statique : identique pour toutes les visualisations d'une même brique, il ferait annoncer le même titre par un lecteur d'écran sur des dizaines de pages différentes — et, vérifié en production avant correction, une visualisation « Graphiques divers » était servie sous le titre `data-fair-charts`.
 
-Contrairement à `lang`, **le proxy ne réécrit pas le titre** : aucune branche de data-fair n'implémente cette injection, seul l'en-tête `x-resource` transporte le titre de la ressource. Le `<title>` déclaré dans `index.html` est donc bien celui qu'annoncent l'onglet et les technologies d'assistance — vérifié en production, une visualisation « Graphiques divers » est servie sous le titre `data-fair-charts`.
+**Comme `lang`, le titre est désormais réécrit par le proxy** (`api/src/applications/proxy.ts`) : le `<title>` de la brique est remplacé par le titre de l'application servie, et inséré si la brique n'en déclare aucun. C'est donc le titre de la visualisation qu'annoncent l'onglet et les technologies d'assistance.
 
-En attendant que le titre de la visualisation soit posé côté proxy, le `<title>` doit au minimum être un nom de modèle lisible anglais (`Charts`, `Dashboards`, `Treemap`) et jamais un slug de paquet ni le nom du dépôt. Toujours aucun appel à `document.title` à ajouter dans l'application.
+Rien à faire côté application : le `<title>` du dépôt ne sert plus qu'au catalogue (nom de modèle lisible anglais — `Charts`, `Dashboards`, `Treemap` — jamais un slug de paquet ni le nom du dépôt), et toujours aucun appel à `document.title` à ajouter.
 
 ## Validité du code source — critère 8.2
 
@@ -56,6 +56,8 @@ Sur une migration ou une reprise, supprimer les doublons. L'i18n du catalogue pa
 `<meta charset>` doit rester dans les **1024 premiers octets** du document : un bloc de commentaire placé avant suffit à le repousser et à provoquer une erreur.
 
 ## Rendu graphique — le gros morceau
+
+Le proxy supprime **tous** les `<title>` déclarés avant de poser le sien, donc un doublon de titre ne survit pas dans le document servi. Ce n'est pas une raison de le laisser dans la source : la validation W3C porte sur le dépôt, et l'import au catalogue lit bien l'`index.html` d'origine — avec ses doublons, qu'il départage par `lang`.
 
 C'est ici que se concentre l'essentiel des non-conformités. La difficulté dépend entièrement de la technologie de rendu.
 
