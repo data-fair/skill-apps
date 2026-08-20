@@ -31,26 +31,7 @@ Avant de démarrer, évaluez la complexité de l'app legacy :
 
 ### Fichier d'entrée
 
-Remplacer `app.html` (Nuxt) ou `public/index.html` (Vue CLI) par un `index.html` à la racine :
-
-```html
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="application-name" content="Mon App">
-  <meta name="df:filter-concepts" content="true">
-  <title>Mon App</title>
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
-</html>
-```
-
-**Important** : DataFair injecte `%APPLICATION%` dans le `<head>` au runtime. Ne pas oublier le placeholder si vous aviez une logique custom dans `app.html`.
+Remplacer `app.html` (Nuxt) ou `public/index.html` (Vue CLI) par un `index.html` à la racine, **en reprenant le squelette canonique de la section « index.html — document complet » du SKILL.md** — ne pas le réinventer : pas de `lang` sur `<html>` (posé par le proxy), `<main id="app">` et non `<div>`, `<link>` vers `_theme.css` + déclaration `@layer`, `application-name` en `[a-z0-9-]`, une seule occurrence du placeholder `%APPLICATION%` (le script inline `window.APPLICATION=%APPLICATION%;`), et les métas `df:*` adaptées à l'app. Lors de la migration, purger les métas mortes (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`).
 
 ### État global (Vuex → Composables)
 
@@ -63,19 +44,16 @@ export const mutations = { SET_LIST(state, list) { state.list = list } }
 export const actions = { async fetchList({ commit }) { ... } }
 
 // Après (src/composables/useDatasets.ts)
-import { ref } from 'vue'
+// useFetch est appelé UNE fois, au niveau module ou dans un setup : ses refs
+// (data, loading, error) restent réactives — ne jamais copier leurs .value.
+import { computed } from 'vue'
 import { useFetch } from '@data-fair/lib-vue/fetch.js'
 
-const list = ref([])
-const loading = ref(false)
+const fetch = useFetch<{ results: Dataset[] }>('/api/v1/datasets')
 
-export function useDatasets() {
-  const fetchList = async () => {
-    const { data, loading: l } = useFetch('/api/v1/datasets')
-    loading.value = l.value
-    list.value = data.value || []
-  }
-  return { list, loading, fetchList }
+export function useDatasets () {
+  const list = computed(() => fetch.data.value?.results ?? [])
+  return { list, loading: fetch.loading, refresh: fetch.refresh }
 }
 ```
 
@@ -98,22 +76,7 @@ Voir la section dédiée "HTTP" plus bas pour les détails sur `useFetch`.
 2. Installer : `npm install vuetify@^4.0.0 vite-plugin-vuetify@^2.0.0`
 3. Ne **pas** créer de `src/styles/settings.scss` local : utiliser celui de la lib, qui câble les variables de police du thème DataFair (`$body-font-family: var(--d-body-font-family)`). Un fichier local qui ne les déclare pas fait rendre la visualisation en Roboto dans un portail à typo personnalisée.
 
-4. Créer `vite.config.mjs` :
-
-```js
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import vuetify from 'vite-plugin-vuetify'
-import { settingsPath } from '@data-fair/lib-vuetify/vite.js'
-
-export default defineConfig({
-  plugins: [
-    vue(),
-    vuetify({ autoImport: true, styles: { configFile: settingsPath } })
-  ],
-  server: { port: 3000 }
-})
-```
+4. Créer `vite.config.ts` — reprendre le contenu complet de `references/root-files.md` (base `/app/`, plugin `vueI18n({})` sans `include`, alias `@`, `settingsPath` en `configFile`), et s'assurer que `@data-fair/dev-server` est ≥ 2.3.4 (police du site en dev).
 
 5. Adapter les composants Vuetify (voir section Vuetify 2 → 4 ci-dessous).
 
@@ -144,7 +107,7 @@ export default defineConfig({
 
 ## Vue CLI → Vite
 
-- Remplacer `vue.config.js` par `vite.config.mjs`
+- Remplacer `vue.config.js` par `vite.config.ts`
 - Utiliser `@vitejs/plugin-vue`
 - Déplacer `index.html` à la racine
 - Remplacer `VUE_APP_*` par `VITE_*`
@@ -153,7 +116,7 @@ export default defineConfig({
 ## HTTP
 
 - Remplacer `axios` par `useFetch` de `@data-fair/lib-vue/fetch.js`
-- `useFetch` gère la réactivité, le loading, l'annulation et les notifications
+- `useFetch` gère la réactivité, le loading, l'erreur et l'annulation (les notifications, elles, passent par `useAsyncAction` pour les mutations)
 - `ofetch` direct est **réservé aux cas particuliers** (blob, download, upload). **Tout le reste doit passer par `useFetch`.**
 
 Exemple de migration `ofetch` → `useFetch` :
@@ -261,15 +224,20 @@ Concrètement, sur une app legacy qui s'allongeait avec `iframe-resizer` :
 
 Ne pas conserver de dépendance à `iframe-resizer` dans le code de l'app : la mesure est désormais faite par le shim d-frame injecté par DataFair (`data-iframe-height`), pas par la lib.
 
+## Schéma de configuration (VJSF 2 → 3)
+
+Les apps legacy portent souvent des mots-clés vjsf 2 (`x-display`, `x-fromUrl`, `x-itemsProp`, `x-itemTitle`, `x-itemKey`, `x-if`) dans leur `config-schema.json` : ils sont **silencieusement ignorés** par VJSF 3+ (onglets aplatis, sélecteurs dégradés en champs texte, sans aucune erreur). Suivre la table de migration du skill `vjsf` (`references/migration-v2-to-v3.md`), poser `<meta name="df:vjsf" content="3">` dans `index.html`, puis relancer `npm run build-types`.
+
 ## Checklist de migration
 
 1. [ ] Migrer le build (Vue CLI → Vite)
 2. [ ] Migrer Vuetify 2 → Vuetify 4
 3. [ ] Migrer les composants Vue 2 → Vue 3 (Composition API)
-4. [ ] Remplacer axios par useFetch
-5. [ ] Implémenter createConfig
-6. [ ] Implémenter reactiveSearchParams
-7. [ ] Implémenter le thème dynamique (session) : `vuetifySessionOptions`, `<link>` vers `_theme.css`, déclaration `@layer`, et les quatre thèmes `default` / `dark` / `hc` / `hc-dark`
-8. [ ] Tester le mode draft (postMessage)
-9. [ ] Tester les filtres et la réactivité URL
-10. [ ] `npm run build` + `npm run type-check` + `npm run lint`
+4. [ ] Migrer le schéma de config VJSF 2 → 3 (`x-*` → `layout`, meta `df:vjsf`, cf. skill `vjsf`)
+5. [ ] Remplacer axios par useFetch
+6. [ ] Implémenter createConfig
+7. [ ] Implémenter reactiveSearchParams
+8. [ ] Implémenter le thème dynamique (session) : `vuetifySessionOptions`, `<link>` vers `_theme.css`, déclaration `@layer`, et les quatre thèmes `default` / `dark` / `hc` / `hc-dark`
+9. [ ] Tester le mode draft (postMessage)
+10. [ ] Tester les filtres et la réactivité URL
+11. [ ] `npm run build` + `npm run type-check` + `npm run lint`

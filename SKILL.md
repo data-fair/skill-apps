@@ -1,18 +1,15 @@
 ---
 name: skill-apps
-description: |
-  Utiliser dès que l'utilisateur travaille sur une application DataFair : création d'une
-  nouvelle app, migration d'un projet legacy, modification ou reprise d'une app existante.
-  S'applique aux projets Vue 3 + Vuetify 4 + Vite.
-  Utiliser aussi lorsqu'il est question de createConfig, useFetch, reactiveSearchParams,
-  window.APPLICATION, config-schema.json, df-dev-server, d-frame, d'intégration iframe DataFair,
-  de la configuration (.dev-config.json), du contenu d'index.html et de ses métas
-  (application-name, df:sync-state, df:vjsf, df:capture-delay), du thème dynamique
-  (vuetifySessionOptions, _theme.css, mode sombre, contraste renforcé), de l'internationalisation
-  (createI18n, vue-i18n, locale de session), ou de l'accessibilité RGAA d'une visualisation.
-  Couvre aussi les fichiers racine : eslint.config.js/neostandard, tsconfig.json,
-  vite.config.ts, .editorconfig, .zellij.kdl, peerDependencies de lib-vue (dayjs),
-  et les conventions de test Playwright (tests/, projets unit/e2e, .spec.ts).
+description: >
+  Utiliser dès que le travail porte sur une application DataFair (visu Vue 3 +
+  Vuetify 4 + Vite) : création d'une nouvelle app, migration d'un projet legacy,
+  reprise d'une app existante. Déclencheurs : window.APPLICATION,
+  config-schema.json, .dev-config.json, df-dev-server, d-frame ou intégration
+  iframe, createConfig, useFetch, reactiveSearchParams, index.html et ses métas
+  df:*, capture d'écran et miniatures, thème dynamique (_theme.css, mode sombre,
+  contraste renforcé), internationalisation de session, accessibilité RGAA d'une
+  visualisation, fichiers racine (eslint, tsconfig, vite, zellij, husky,
+  commitlint) et tests Playwright.
 ---
 
 # Skill Apps – DataFair Applications
@@ -25,6 +22,8 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
 - **Nouvelle visu** → Suivre ce skill à 100 %
 - **Visu existante en migration** → Voir `references/migration-guide.md`
 - **Plugin backend** → Ne pas utiliser ce skill
+
+**SKILL COMPLÉMENTAIRE REQUIS : `vjsf`** (dépôt `data-fair/lib`, `skills/vjsf/`) dès qu'on touche au schéma de configuration — vocabulaire `layout`, `getItems`, conditionnels, `discriminator`, i18n `x-i18n-*`, migration vjsf 2 → 3, et les patterns du parc (slider, sélecteur d'icônes MDI, onglets, arrays). Ce skill-ci ne couvre que ce qui est propre aux applications.
 
 **Stack standard** (obligatoire pour les nouveaux projets) :
 - Vue 3.5+, Composition API, `<script setup lang="ts">`
@@ -45,11 +44,19 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
   "dev-server": "APP_URL=http://localhost:3000/app/ df-dev-server",
   "dev-app": "vite",
   "build": "vite build",
-  "lint": "eslint . --fix",
+  "lint": "eslint .",
+  "lint-fix": "eslint --fix .",
+  "prepare": "husky || true",
   "type-check": "vue-tsc --noEmit",
-  "build-types": "df-build-types && cp src/config/.type/resolved-schema.json public/config-schema.json"
+  "build-types": "df-build-types && cp src/config/.type/resolved-schema.json public/config-schema.json",
+  "test": "playwright test --max-failures=1",
+  "test-unit": "playwright test --project unit",
+  "test-e2e": "playwright test --project e2e",
+  "quality": "npm run lint && npm run build-types && npm run type-check && npm run build && npm test && npm audit --omit=dev --audit-level=critical"
 }
 ```
+
+> Scripts de test **au tiret** (`test-e2e`), comme les services — pas la variante legacy `test:e2e` encore présente dans la plupart des apps.
 
 ## Contrat DataFair
 
@@ -249,15 +256,10 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 | `snippets/schema-static-filters.ts` | Définition VJSF des filtres statiques prédéfinis (`in`, `out`, `interval`, `starts`, `exists`, `notExists`) |
 | `snippets/report-config-error.ts` | Remonter une erreur de config à DataFair (`POST /error`, mode draft) |
 | `snippets/d-frame.ts` | Intégration d'autres vues DataFair via d-frame (côté parent + côté enfant) |
-| `snippets/schema-tabs.ts` | Organisation par onglets (`allOf` + `title`) |
-| `snippets/schema-discriminator.ts` | Discrimination de type (`discriminator` + `oneOf` + `const`) |
-| `snippets/schema-getitems.ts` | Sélecteurs dynamiques peuplés par API (`layout.getItems` avec `url`) |
-| `snippets/schema-getitems-expr.ts` | Sélecteurs dynamiques peuplés par expression (`layout.getItems` avec `expr`) |
-| `snippets/schema-array.ts` | Arrays avancés (`itemTitle`, `itemCopy`, `getDefaultData`) |
-| `snippets/schema-conditional.ts` | Affichage conditionnel (`layout.if` / `layout.switch`) |
-| `snippets/schema-hidden.ts` | Champs cachés (`layout: "none"`) |
 | `snippets/schema-xexports.ts` | Génération de types TypeScript (`x-exports`) |
 | `snippets/schema-color.ts` | Couleurs (string hex + pattern thème/custom, piège `format: "hexcolor"`) |
+
+> Les exemples de schéma génériques (onglets, discriminator, `getItems`, arrays, conditionnels, champs cachés, slider, sélecteur d'icônes) vivent dans le **skill `vjsf`** (`vjsf/references/patterns.md`).
 
 > **⚠️ Attention : `createSession` est asynchrone, et `siteInfo` n'est pas optionnel**
 > `createSession({ siteInfo: true })` fetch les infos du site (thème, couleurs, locale) via API. Il **doit être `await`** avant d'appeler `vuetifySessionOptions(session)`, qui lève `vuetifySessionOptions requires fetching site info in session util` si `session.site.value` est nul. Ne jamais appeler `createSession` de manière synchrone en dehors d'une fonction `async`.
@@ -284,9 +286,10 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 
 ```
 my-visu/
+├── .nvmrc                       # Version Node majeure seule (ex: "24") — requis par .zellij.kdl
 ├── .zellij.kdl                  # Layout dev (vite + df-dev-server)
 ├── index.html                   # %APPLICATION% + meta tags df:*
-├── vite.config.mjs
+├── vite.config.ts
 ├── package.json
 ├── public/
 │   ├── config-schema.json       # Généré depuis src/config/schema.json
@@ -310,213 +313,31 @@ my-visu/
 
 ## Fichiers de configuration racine
 
-Ces fichiers ne se devinent pas et se recopient mal : reprendre celui d'une application maintenue au hasard fait hériter de ses divergences. Les valeurs ci-dessous sont celles du parc réel, vérifiées.
+Ces fichiers ne se devinent pas et se recopient mal : reprendre celui d'une application maintenue au hasard fait hériter de ses divergences.
 
-### package.json — dépendances et scripts
+> **Statut de ce boilerplate** : c'est la **cible**, définie sur `bar-chart-race` en s'inspirant des services (`data-fair`, `catalogs`, `processings`) — pas l'état du parc. La plupart des apps existantes en divergent (pas de husky, `lint` avec `--fix`, un seul projet Playwright, tsconfig sans `tests/**`). Sur une **reprise**, migrer vers cette cible plutôt que d'imiter l'app voisine ; l'état réel du parc est noté point par point dans `references/root-files.md`.
 
-**Les peerDependencies de `@data-fair/lib-vue` doivent être déclarées explicitement.** La lib les déclare en `peerDependencies` et ne les installe donc pas :
+Contenus intégraux à copier : **`references/root-files.md`** (package.json et peerDependencies, husky/commitlint, `.nvmrc`, `.zellij.kdl`, `eslint.config.js`, `tsconfig.json`, `vite.config.ts`, `playwright.config.ts`, `.gitignore`). Les pièges à connaître même sans générer de fichier :
 
-```
-@vueuse/core >=10 · dayjs 1 · ofetch 1 · reconnecting-websocket 4 · vue 3 · vue-router 4||5
-```
-
-`dayjs` est le piège courant : il n'est jamais importé directement (on passe par `createLocaleDayjs` / `useLocaleDayjs`), donc son absence ne se voit ni au `type-check` ni au build tant que npm l'a hissé depuis une dépendance transitive — puis casse ailleurs. Les applications de référence la déclarent toutes. Ne déclarer que les peers réellement utilisées (`reconnecting-websocket` et `vue-router` ne servent qu'aux apps qui font du WS ou du routage).
-
-**Scripts** : cf. « Scripts obligatoires dans package.json » plus haut. Deux précisions :
-
-- `"dev": "zellij --layout .zellij.kdl"` **suppose que `.zellij.kdl` existe** — sans lui le script échoue. Les 11 applications maintenues l'ont toutes ; c'est la convention, pas une option.
-- `build-types` doit tourner **avant** `type-check` et `build` sur un clone neuf : `src/config/.type/` est git-ignoré et `src/config/index.ts` le réexporte. Ordonner la CI en conséquence (`build-types` → `lint` → `type-check` → `build`).
-- Pas de variante `--ui` en script : le flag se passe à la volée (`npm run test-e2e -- --ui`). Les services n'en déclarent pas.
-
-### .zellij.kdl
-
-Trois panes : un shell libre, `dev-app` (Vite) et `dev-server` (`df-dev-server`). Le `nvm use` de chaque pane aligne la version de Node.
-
-```kdl
-layout {
-    pane {
-      split_direction "vertical"
-      pane name="MonApp" borderless=true {
-        command "bash"
-        args "-ic" "nvm use > /dev/null 2>&1 && bash"
-      }
-    }
-    pane {
-      split_direction "vertical"
-      pane name="app" {
-        command "bash"
-        args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-app"
-      }
-      pane name="dev-server" {
-        command "bash"
-        args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-server"
-      }
-    }
-}
-```
-
-### eslint.config.js
-
-Aligner sur les **services** (`data-fair`, `portals`, `catalogs`), pas sur les applications : plusieurs d'entre elles n'utilisent que `tseslint.configs.recommended` + `eslint-plugin-vue`, deux presets qui ne portent **aucune règle de formatage**. Un dépôt ainsi configuré n'impose ni indentation, ni quotes, ni point-virgule sur ses `.ts` — le style ne tient plus qu'aux réglages d'éditeur de chacun.
-
-```js
-import neostandard from 'neostandard'
-import pluginVue from 'eslint-plugin-vue'
-import pluginVuetify from 'eslint-plugin-vuetify'
-import dfLibRecommended from '@data-fair/lib-utils/eslint/recommended.js'
-
-// le flat/base de eslint-plugin-vuetify enregistre déjà le plugin `vue`, et
-// ESLint 9.39+ refuse qu'un plugin soit redéfini — retirer `plugins` de la config de vue.
-const vueFlatRecommended = pluginVue.configs['flat/recommended'].map(({ plugins, ...rest }) => rest)
-
-export default [
-  ...dfLibRecommended,
-  ...vueFlatRecommended,
-  ...pluginVuetify.configs['flat/recommended'],
-  ...neostandard({ ts: true }),
-  {
-    rules: {
-      'vue/multi-word-component-names': 'off',
-      'no-undef': 'off' // typescript s'en charge
-    }
-  },
-  {
-    files: ['**/*.vue'],
-    languageOptions: { parserOptions: { parser: '@typescript-eslint/parser' } }
-  },
-  { ignores: ['dist/', 'node_modules/', 'src/config/.type/', 'tests/output/'] }
-]
-```
-
-> **⚠️ Ordre et double enregistrement du plugin `vue`.** Le `flat/base` de `eslint-plugin-vuetify` enregistre lui-même le plugin `vue`, et **ESLint 9.39+ lève une erreur si un plugin est redéfini**. Empiler naïvement `pluginVue.configs['flat/recommended']` et `pluginVuetify.configs['flat/recommended']` casse donc `npm run lint`. Le contournement est celui des services : retirer la clé `plugins` de la config de vue avec un `.map(({ plugins, ...rest }) => rest)`. Et `neostandard` vient **après** vue et vuetify, pas avant.
-
-- `neostandard({ ts: true })` apporte le **style** (`neostandard` en devDependencies).
-- `eslint-plugin-vuetify` détecte les composants et props Vuetify dépréciés — précieux sur une migration depuis Vuetify 2. Les cinq services le configurent (dans leur `ui/`), en `^2.7.2`.
-- `@data-fair/lib-utils/eslint/recommended.js` est livré avec `lib-utils`, déjà installé : il bloque les imports de modules dépréciés (`@koumoul/sd-vue`, `http-errors`, `rfdc`…). Il ne fait que ça — il ne remplace pas `neostandard`.
-- `src/config/.type/` doit être ignoré : c'est du généré.
-
-> **Piège** : `"lint": "eslint . --fix"` **réécrit** les fichiers qu'il atteint. Sur une migration, tout répertoire legacy encore présent sera reformaté au premier `npm run lint`. L'ajouter aux `ignores` tant qu'il n'est pas supprimé.
-
-### Pas de `.editorconfig`
-
-Aucun dépôt maison n'en a. Sur une reprise, le supprimer — mais seulement après avoir vérifié qu'ESLint porte bien les règles de style (`neostandard`), sinon le dépôt se retrouve sans aucune convention.
-
-### tsconfig.json
-
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "strict": true,
-    "jsx": "preserve",
-    "sourceMap": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "skipLibCheck": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
-  },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "tests/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
-}
-```
-
-`include` doit couvrir `tests/**` : sans lui les fichiers de test échappent au `type-check`, et l'alias `@/` n'y résout pas.
-
-### vite.config.ts
-
-```ts
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
-import vueI18n from '@intlify/unplugin-vue-i18n/vite'
-import { settingsPath } from '@data-fair/lib-vuetify/vite.js'
-import { fileURLToPath, URL } from 'node:url'
-
-export default defineConfig({
-  base: process.env.PUBLIC_URL ?? '/app/',
-  plugins: [
-    vue({ template: { transformAssetUrls } }),
-    vueI18n({}),
-    vuetify({ autoImport: true, styles: { configFile: settingsPath } })
-  ],
-  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  server: {
-    port: Number(process.env.PORT ?? 3000),
-    strictPort: !!process.env.PORT,
-    hmr: { port: Number(process.env.PORT ?? 3000), protocol: 'ws' }
-  }
-})
-```
-
-> **⚠️ `vueI18n({})` — sans option `include`.** Certaines applications passent `include: '.../lib-vuetify/**/*.vue'`, hérité de l'ancien `@intlify/vite-plugin-vue-i18n`. Dans `@intlify/unplugin-vue-i18n`, `include` désigne les **fichiers ressources** i18n (JSON/YAML) : le plugin tente alors de parser un SFC entier comme du JSON et le build échoue sur `SyntaxError: Unexpected token '<'` en pointant `@data-fair/lib-vuetify/ui-notif.vue`. Les blocs `<i18n>` des SFC sont pris en charge sans aucune option. Symptôme trompeur : l'erreur n'apparaît qu'une fois un composant de `lib-vuetify` réellement importé — le build passe tant que `App.vue` est un squelette.
-
-`base` vaut `/app/` par défaut, ce qu'attend `df-dev-server` ; la CI le surcharge par `PUBLIC_URL`.
-
-### Tests — Playwright, dans `tests/`
-
-**Aucun dépôt maison ne colocalise ses tests à côté des sources.** Convention : dossier `tests/`, extension `.spec.ts` (jamais `.test.ts`), Playwright découpé en **projets**.
-
-```ts
-// playwright.config.ts
-export default defineConfig({
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  outputDir: './tests/output',
-  projects: [
-    { name: 'unit', testDir: './tests/unit' },
-    { name: 'e2e', testDir: './tests/e2e', use: { ...devices['Desktop Chrome'] } }
-  ]
-})
-```
-
-```json
-{ "test": "playwright test", "test-unit": "playwright test --project unit", "test-e2e": "playwright test --project e2e" }
-```
-
-Les services n'ont pas de `webServer` (leur stack démarre hors-bande, en docker). Une application, elle, a besoin de `webServer` pour lancer Vite — et `webServer` est **global à la config**, donc il démarrerait aussi sur un run unitaire. Le conditionner plutôt que de scinder en deux fichiers de configuration.
-
-Pour les tests e2e, mocker `**/simple-directory/**` (session) et les endpoints de données, et injecter `window.APPLICATION` via `page.addInitScript` avec `writable: false` **avant** le script inline de `index.html` : en `vite` nu, `window.APPLICATION=%APPLICATION%` lève une `SyntaxError` (placeholder non substitué) que le parser ignore ensuite.
-
-> **Un test e2e qui ne peut pas échouer ne prouve rien.** Un `toHaveCount(0)` sur un élément que la configuration de test ne produit jamais passe trivialement. Écrire le **contrôle positif** en regard (même configuration, ressource valide → l'élément est présent), ou vérifier par mutation que l'assertion échoue bien quand on casse le code visé.
-
-### .gitignore
-
-```
-node_modules
-dist
-src/config/.type
-tests/output
-playwright-report
-```
-
-`src/config/.type/` est généré par `df-build-types` ; `public/config-schema.json`, lui, **est commité**.
+- **peerDependencies de `@data-fair/lib-vue` à déclarer explicitement** — `dayjs` est le piège courant : jamais importé directement, son absence ne se voit ni au `type-check` ni au build tant que npm l'a hissé depuis une dépendance transitive, puis casse ailleurs.
+- **`build-types` avant `type-check` et `build`** sur un clone neuf : `src/config/.type/` est git-ignoré et réexporté par `src/config/index.ts` — ordonner la CI en conséquence.
+- **`.nvmrc` obligatoire dès que `.zellij.kdl` existe** (version majeure seule, ex. `24`) : sans lui, chaque pane sort en `[ EXIT CODE: 127 ]` sans aucun message — l'oubli le plus facile en générant les fichiers racine d'un nouveau projet.
+- **eslint : `neostandard({ ts: true })` + vue + vuetify + `@data-fair/lib-utils/eslint/recommended.js`**, avec le contournement du double enregistrement du plugin `vue` — obligatoire dès **ESLint 9.39+** (aujourd'hui seuls `bar-chart-race` et `data-fair/ui` y sont ; les autres services, en 9.35, n'en ont pas encore besoin) — config complète dans `references/root-files.md`.
+- **`vueI18n({})` sans option `include`** dans `vite.config.ts` : un `include` hérité de l'ancien plugin fait parser des SFC entiers comme du JSON et le build échoue sur `SyntaxError: Unexpected token '<'` en pointant `ui-notif.vue`.
+- **Police du site cassée en dev seulement** : le dev server de Vite réécrit les URLs root-relative d'`index.html` en `base + url` → le `<link>` vers `/simple-directory/api/sites/_theme.css` part en `/app/simple-directory/…`, servi en `200 text/html` (fallback SPA de Vite), rendu en serif par défaut. Corrigé dans `@data-fair/dev-server` ≥ 2.3.4 (redirection vers son proxy `/simple-directory`) : **mettre à jour la dépendance**, pas de correctif dans l'app.
+- **Husky + commitlint comme les services** : `pre-commit` → `lint` (sans `--fix` — la plupart des apps legacy ont encore `lint: eslint . --fix`, à corriger en reprise), `commit-msg` → commitlint, `pre-push` → `quality` ; config dans un fichier `commitlint.config.ts`, comme tout l'écosystème. Ne pas rejouer les e2e en CI.
+- **Tests Playwright dans `tests/`**, `.spec.ts` (jamais `.test.ts`), projets `unit`/`e2e` ; `webServer` conditionné au projet e2e ; injecter `window.APPLICATION` via `page.addInitScript` ; toute assertion négative exige son contrôle positif en regard.
+- **Pas de `.editorconfig`** — aucun dépôt maison n'en a ; le supprimer sur une reprise, une fois `neostandard` en place.
 
 ## Schéma de configuration (VJSF)
 
-DataFair utilise [VJSF](https://koumoul-dev.github.io/vuetify-jsonschema-form/) v3 pour générer le formulaire de configuration à partir du fichier `public/config-schema.json`. Le fichier source est `src/config/schema.json` et il est traité par `df-build-types` pour générer à la fois les types TypeScript et le schéma résolu copié dans `public/`.
+DataFair utilise [VJSF](https://koumoul-dev.github.io/vuetify-jsonschema-form/) 3+ (la v4 partage le même vocabulaire) pour générer le formulaire de configuration à partir du fichier `public/config-schema.json`. Le fichier source est `src/config/schema.json` et il est traité par `df-build-types` pour générer à la fois les types TypeScript et le schéma résolu copié dans `public/`.
 
 > **Note** : `df-build-types` est fourni par le package **`@data-fair/lib-types-builder`** (à installer en `devDependencies`).
 
 ### Libellés : majuscule initiale, casse de phrase
 
-Tout libellé visible par l'utilisateur commence par une **majuscule** : `title` et `description` de chaque champ, libellés des options d'un `enum` ou d'un `oneOf`, textes de boutons, empty states, messages d'erreur et infobulles. `"catégorie"` et `"ajouter un champ"` sont des défauts de finition, au même titre qu'une faute d'orthographe — et ils sont très visibles, un formulaire de configuration n'étant qu'une colonne de libellés.
-
-La règle est la **casse de phrase** française, pas la casse de titre à l'anglaise : seule l'initiale prend la majuscule, le reste du libellé reste en minuscules. « Somme des valeurs d'un champ », jamais « Somme des Valeurs d'un Champ ».
-
-Deux exceptions, et deux seulement :
-
-- les **identifiants techniques** rendus tels quels gardent leur casse d'origine (`h1`, `h2`, un nom de champ du dataset, un code de projection) ;
-- les **noms propres** et marques (`OpenStreetMap`, `GeoJSON`).
-
-La règle porte sur **toute chaîne visible par l'utilisateur, où qu'elle vive** — et pas seulement sur celles qui sont déjà internationalisées. Dans l'état actuel du parc l'immense majorité des textes sont des chaînes françaises en dur dans les templates : ce sont elles qui s'affichent aujourd'hui, elles sont donc concernées au premier chef. Ne pas attendre un passage à l'i18n pour appliquer la casse, et quand des blocs `<i18n>` existent, la majuscule est portée dans chaque langue, pas seulement en français.
+La règle complète (majuscule initiale, casse de phrase française, exceptions identifiants techniques et noms propres) est dans le **skill `vjsf`**. Point propre aux applications : elle porte sur **toute chaîne visible, où qu'elle vive** — pas seulement les schémas. Dans l'état actuel du parc, l'immense majorité des textes sont des chaînes françaises en dur dans les templates : elles sont concernées au premier chef. Ne pas attendre un passage à l'i18n pour appliquer la casse ; quand des blocs `<i18n>` existent, la majuscule est portée dans chaque langue.
 
 ### Pipeline de build
 
@@ -539,71 +360,9 @@ src/config/.type/               → généré automatiquement
 
 **Commande** : `npm run build-types` (doit être relancée après chaque modification de `schema.json`).
 
-### Organisation du formulaire (`allOf` + `title`)
+### Vocabulaire, patterns et sélecteurs → skill `vjsf`
 
-Chaque élément de `allOf` avec un `title` devient une section/onglet dans l'UI DataFair :
-
-```json
-{
-  "type": "object",
-  "allOf": [
-    { "title": "Source de données", "properties": { "datasets": {...} } },
-    { "title": "Paramètres", "properties": { "chart": {...} } }
-  ]
-}
-```
-
-> Voir `snippets/schema-tabs.ts` pour un exemple complet.
-
-### Discrimination de type (`discriminator` + `oneOf` + `const`)
-
-Pattern recommandé pour des sous-formulaires conditionnels (ex: choisir un type de graphique) :
-
-```json
-{
-  "discriminator": { "propertyName": "type" },
-  "default": { "type": "line" },
-  "oneOf": [
-    { "title": "Courbe", "properties": { "type": { "const": "line" } } },
-    { "title": "Barres", "properties": { "type": { "const": "bar" } } }
-  ]
-}
-```
-
-`oneOfLayout` permet de personnaliser le label du sélecteur de variante. Voir `snippets/schema-discriminator.ts`.
-
-### Sélecteurs dynamiques (`layout.getItems`)
-
-**Depuis une API** (`url`) :
-```json
-{
-  "layout": {
-    "getItems": {
-      "url": "api/v1/datasets?status=finalized&q={q}&select=id,title",
-      "itemKey": "data.href",
-      "itemTitle": "data.title",
-      "itemsResults": "data.results"
-    }
-  }
-}
-```
-
-**Depuis une expression** (`expr`) :
-```json
-{
-  "layout": {
-    "getItems": {
-      "expr": "rootData.datasets",
-      "itemKey": "data.id",
-      "itemTitle": "data.title"
-    }
-  }
-}
-```
-
-**Variables disponibles** : `{q}` (recherche), `${rootData...}`, `${parent...}`, `${context...}`.
-
-> Voir `snippets/schema-getitems.ts` et `snippets/schema-getitems-expr.ts`.
+Tout le générique vit dans le skill `vjsf` et n'est pas dupliqué ici : organisation en onglets (`allOf` + `title`), discrimination de type (`discriminator` + `oneOf` + `const` + `oneOfLayout` — gros point de **performance** sur les grands `oneOf`), sélecteurs dynamiques `getItems` (`url` / `expr`, règle **`size=50`** sur les URLs data-fair dont le défaut est 12), affichage conditionnel (`layout.if` / `layout.switch`), champs cachés (`layout: "none"`), arrays avancés (`itemTitle` / `itemSubtitle` / `itemCopy` / `getDefaultData`), slider soigné (`label: ""` + `slots.before` + ticks), sélecteur d'icônes MDI (`icons-mdi-latest`, URL **relative** dans une app). Les exemples prêts à copier sont dans `vjsf/references/patterns.md`.
 
 ### Prérequis dataset déclarés par l'URL du sélecteur
 
@@ -612,19 +371,6 @@ Les paramètres du `getItems.url` (ou de `x-fromUrl`) de la propriété `dataset
 - Déclarer les prérequis dans l'URL du sélecteur racine `datasets` : `api/v1/datasets?status=finalized&bbox=true&...`.
 - Les placeholders `${...}` (ex. `${context.datasetFilter}`) sont ignorés par l'extraction.
 - La meta `vocabulary-require` des apps legacy n'est **plus lue** (aucune occurrence dans le code) : la supprimer lors des migrations et reporter l'exigence dans l'URL du sélecteur.
-
-### Layouts spéciaux
-
-| Layout | Usage | Exemple |
-|--------|-------|---------|
-| `slider` | Entier avec curseur | `opacity`, `tension` |
-| `color-picker` | Sélecteur de couleur | `color` |
-| `textarea` | Texte multiligne | `description` |
-| `none` | Champ caché | `uuid`, `hash` |
-| `tabs` | Onglets explicites à la racine | data-fair-metrics |
-| `getItems` | Sélecteur peuplé dynamiquement | datasets, champs |
-
-> Voir `snippets/schema-hidden.ts`.
 
 ### Schémas de couleur
 
@@ -640,7 +386,10 @@ Deux patterns selon le besoin :
 }
 ```
 
-**2. Couleur thème OU custom** — quand l'utilisateur doit pouvoir choisir entre une couleur Vuetify (primary, secondary, ...) et une couleur libre :
+**2. Couleur thème OU custom** — quand l'utilisateur doit pouvoir choisir entre une couleur Vuetify (primary, secondary, ...) et une couleur libre.
+
+> **Règle** : dès qu'un sélecteur propose `primary`, il propose **toujours aussi `secondary` et `accent`** — jamais `primary` seul. Les trois couleurs de thème forment le contrat minimal d'un portail.
+
 ```json
 {
   "type": "object",
@@ -655,7 +404,8 @@ Deux patterns selon le besoin :
           "type": "string",
           "oneOf": [
             { "const": "primary", "title": "Primaire" },
-            { "const": "secondary", "title": "Secondaire" }
+            { "const": "secondary", "title": "Secondaire" },
+            { "const": "accent", "title": "Accent" }
           ]
         }
       }
@@ -674,47 +424,6 @@ Deux patterns selon le besoin :
 > **⚠️ Anti-pattern** : ne jamais écrire `"format": "hexcolor"`. Ce format n'existe pas dans le validateur JSON Schema standard et VJSF 3 émet un warning `unknown format "hexcolor" ignored in schema`. Le rendu reste correct par chance (grâce à `layout: "color-picker"`) mais le `format` est trompeur. À retirer lors de toute migration ou revue de schéma.
 
 > Voir `snippets/schema-color.ts` pour les deux patterns complets et prêts à copier.
-
-### Arrays avancés
-
-```json
-{
-  "layout": {
-    "itemTitle": "data.title || 'Nouveau calque'",
-    "itemCopy": "{...item, uuid: crypto.randomUUID()}",
-    "messages": { "addItem": "ajouter un calque" },
-    "getDefaultData": "{ uuid: crypto.randomUUID() }"
-  }
-}
-```
-
-- `itemTitle` : expression JS pour résumer l'élément
-- `itemCopy` : transformation à la duplication
-- `getDefaultData` : valeurs par défaut à la création
-- `messages.addItem` : label du bouton d'ajout
-
-> Voir `snippets/schema-array.ts`.
-
-### Affichage conditionnel (`layout.if` / `layout.switch`)
-
-```json
-{
-  "layout": { "if": "parent.data.category" }
-}
-```
-
-```json
-{
-  "layout": {
-    "switch": [
-      { "if": "!summary && data.dataset", "comp": "expansion-panels" },
-      { "children": [] }
-    ]
-  }
-}
-```
-
-> Voir `snippets/schema-conditional.ts`.
 
 ### Génération de types TypeScript (`x-exports`)
 
@@ -755,6 +464,7 @@ Deux patterns selon le besoin :
   - Pour du **texte**, utiliser `text-primary` / `text-secondary` plutôt que `primary` / `secondary` : ce sont les variantes dont `_theme.css` garantit le contraste sur le fond du site.
   - Rien à coder pour le multi-site : le document est servi depuis l'origine du portail, donc `_theme.css` et les infos de site sont résolus sur cette origine. Une même configuration d'application rend aux couleurs de chaque portail qui l'embarque, vérifié en production.
   - **Piège de la police du site** : avec `'vuetify/styles'`, les `@font-face` du site sont chargées et `--d-body-font-family` est définie, mais rien ne les consomme — la visualisation rend en Roboto dans un portail en typo personnalisée, constaté en production. C'est le symptôme d'un `global.scss` manquant, pas d'un manque côté serveur.
+  - **Deuxième panne de police, en dev seulement** : typo correcte en prod mais serif par défaut en dev = le dev server de Vite a réécrit le `<link>` `_theme.css` sous la `base` de l'app (404). Corrigé côté `@data-fair/dev-server` (≥ 2.3.4) — mettre à jour la dépendance, cf. `references/root-files.md` (constaté sur bar-chart-race).
 
 ### HTTP
 
@@ -1140,6 +850,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] `npm run type-check` passe (TS strict)
 - [ ] `npm run lint` passe
 - [ ] `public/config-schema.json` est généré et à jour
+- [ ] schéma conforme au skill `vjsf` : aucun `x-*` legacy, `size=50` et `{q}`/`qSearchParam` sur les `getItems` data-fair, `discriminator` sur les `oneOf` de variantes
 - [ ] tous les libellés visibles commencent par une majuscule — `title`, `description`, options d'`enum` / `oneOf`, boutons, empty states, messages d'erreur, **y compris les chaînes en dur dans les templates**
 - [ ] `public/thumbnail.png` est présent
 - [ ] `index.html` : pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>` lisible, une seule `<meta name="description">`, `<main id="app">`, `<link>` vers `_theme.css` et déclaration `@layer`
@@ -1163,7 +874,8 @@ Voir `references/migration-guide.md` pour les détails.
 Points clés :
 - Vue 2 → Vue 3 : `data()` → `ref()`, mixins → composables
 - Vuetify 2 → Vuetify 4 : `vite-plugin-vuetify`, nouveaux props (`variant="flat"`)
-- Vue CLI → Vite : `vite.config.mjs`, `VITE_*` env vars
+- Vue CLI → Vite : `vite.config.ts`, `VITE_*` env vars
+- VJSF 2 → 3 : mots-clés `x-*` silencieusement ignorés — table de migration dans le skill `vjsf` (`references/migration-v2-to-v3.md`)
 - Axios → `useFetch` (`@data-fair/lib-vue/fetch.js`)
 - `withUiNotif` → `useAsyncAction` (déprécié)
 
