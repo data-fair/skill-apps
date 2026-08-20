@@ -361,28 +361,37 @@ Aligner sur les **services** (`data-fair`, `portals`, `catalogs`), pas sur les a
 
 ```js
 import neostandard from 'neostandard'
-import dfLibRecommended from '@data-fair/lib-utils/eslint/recommended.js'
 import pluginVue from 'eslint-plugin-vue'
-import vueParser from 'vue-eslint-parser'
-import tseslint from 'typescript-eslint'
+import pluginVuetify from 'eslint-plugin-vuetify'
+import dfLibRecommended from '@data-fair/lib-utils/eslint/recommended.js'
+
+// le flat/base de eslint-plugin-vuetify enregistre déjà le plugin `vue`, et
+// ESLint 9.39+ refuse qu'un plugin soit redéfini — retirer `plugins` de la config de vue.
+const vueFlatRecommended = pluginVue.configs['flat/recommended'].map(({ plugins, ...rest }) => rest)
 
 export default [
-  { ignores: ['dist/', 'node_modules/', 'src/config/.type/', 'tests/output/'] },
   ...dfLibRecommended,
+  ...vueFlatRecommended,
+  ...pluginVuetify.configs['flat/recommended'],
   ...neostandard({ ts: true }),
-  ...pluginVue.configs['flat/recommended'],
   {
-    files: ['**/*.vue'],
-    languageOptions: {
-      parser: vueParser,
-      parserOptions: { parser: tseslint.parser, sourceType: 'module' }
+    rules: {
+      'vue/multi-word-component-names': 'off',
+      'no-undef': 'off' // typescript s'en charge
     }
   },
-  { rules: { 'vue/multi-word-component-names': 'off' } }
+  {
+    files: ['**/*.vue'],
+    languageOptions: { parserOptions: { parser: '@typescript-eslint/parser' } }
+  },
+  { ignores: ['dist/', 'node_modules/', 'src/config/.type/', 'tests/output/'] }
 ]
 ```
 
+> **⚠️ Ordre et double enregistrement du plugin `vue`.** Le `flat/base` de `eslint-plugin-vuetify` enregistre lui-même le plugin `vue`, et **ESLint 9.39+ lève une erreur si un plugin est redéfini**. Empiler naïvement `pluginVue.configs['flat/recommended']` et `pluginVuetify.configs['flat/recommended']` casse donc `npm run lint`. Le contournement est celui des services : retirer la clé `plugins` de la config de vue avec un `.map(({ plugins, ...rest }) => rest)`. Et `neostandard` vient **après** vue et vuetify, pas avant.
+
 - `neostandard({ ts: true })` apporte le **style** (`neostandard` en devDependencies).
+- `eslint-plugin-vuetify` détecte les composants et props Vuetify dépréciés — précieux sur une migration depuis Vuetify 2. Les cinq services le configurent (dans leur `ui/`), en `^2.7.2`.
 - `@data-fair/lib-utils/eslint/recommended.js` est livré avec `lib-utils`, déjà installé : il bloque les imports de modules dépréciés (`@koumoul/sd-vue`, `http-errors`, `rfdc`…). Il ne fait que ça — il ne remplace pas `neostandard`.
 - `src/config/.type/` doit être ignoré : c'est du généré.
 
