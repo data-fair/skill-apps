@@ -10,6 +10,9 @@ description: |
   (application-name, df:sync-state, df:vjsf, df:capture-delay), du thème dynamique
   (vuetifySessionOptions, _theme.css, mode sombre, contraste renforcé), de l'internationalisation
   (createI18n, vue-i18n, locale de session), ou de l'accessibilité RGAA d'une visualisation.
+  Couvre aussi les fichiers racine : eslint.config.js/neostandard, tsconfig.json,
+  vite.config.ts, .editorconfig, .zellij.kdl, peerDependencies de lib-vue (dayjs),
+  et les conventions de test Playwright (tests/, projets unit/e2e, .spec.ts).
 ---
 
 # Skill Apps – DataFair Applications
@@ -304,6 +307,187 @@ my-visu/
 │   └── styles/
 │       └── settings.scss        # Variables SCSS Vuetify
 ```
+
+## Fichiers de configuration racine
+
+Ces fichiers ne se devinent pas et se recopient mal : reprendre celui d'une application maintenue au hasard fait hériter de ses divergences. Les valeurs ci-dessous sont celles du parc réel, vérifiées.
+
+### package.json — dépendances et scripts
+
+**Les peerDependencies de `@data-fair/lib-vue` doivent être déclarées explicitement.** La lib les déclare en `peerDependencies` et ne les installe donc pas :
+
+```
+@vueuse/core >=10 · dayjs 1 · ofetch 1 · reconnecting-websocket 4 · vue 3 · vue-router 4||5
+```
+
+`dayjs` est le piège courant : il n'est jamais importé directement (on passe par `createLocaleDayjs` / `useLocaleDayjs`), donc son absence ne se voit ni au `type-check` ni au build tant que npm l'a hissé depuis une dépendance transitive — puis casse ailleurs. Les applications de référence la déclarent toutes. Ne déclarer que les peers réellement utilisées (`reconnecting-websocket` et `vue-router` ne servent qu'aux apps qui font du WS ou du routage).
+
+**Scripts** : cf. « Scripts obligatoires dans package.json » plus haut. Deux précisions :
+
+- `"dev": "zellij --layout .zellij.kdl"` **suppose que `.zellij.kdl` existe** — sans lui le script échoue. Les 11 applications maintenues l'ont toutes ; c'est la convention, pas une option.
+- `build-types` doit tourner **avant** `type-check` et `build` sur un clone neuf : `src/config/.type/` est git-ignoré et `src/config/index.ts` le réexporte. Ordonner la CI en conséquence (`build-types` → `lint` → `type-check` → `build`).
+
+### .zellij.kdl
+
+Trois panes : un shell libre, `dev-app` (Vite) et `dev-server` (`df-dev-server`). Le `nvm use` de chaque pane aligne la version de Node.
+
+```kdl
+layout {
+    pane {
+      split_direction "vertical"
+      pane name="MonApp" borderless=true {
+        command "bash"
+        args "-ic" "nvm use > /dev/null 2>&1 && bash"
+      }
+    }
+    pane {
+      split_direction "vertical"
+      pane name="app" {
+        command "bash"
+        args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-app"
+      }
+      pane name="dev-server" {
+        command "bash"
+        args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-server"
+      }
+    }
+}
+```
+
+### eslint.config.js
+
+Aligner sur les **services** (`data-fair`, `portals`, `catalogs`), pas sur les applications : plusieurs d'entre elles n'utilisent que `tseslint.configs.recommended` + `eslint-plugin-vue`, deux presets qui ne portent **aucune règle de formatage**. Un dépôt ainsi configuré n'impose ni indentation, ni quotes, ni point-virgule sur ses `.ts` — le style ne tient plus qu'aux réglages d'éditeur de chacun.
+
+```js
+import neostandard from 'neostandard'
+import dfLibRecommended from '@data-fair/lib-utils/eslint/recommended.js'
+import pluginVue from 'eslint-plugin-vue'
+import vueParser from 'vue-eslint-parser'
+import tseslint from 'typescript-eslint'
+
+export default [
+  { ignores: ['dist/', 'node_modules/', 'src/config/.type/', 'tests/output/'] },
+  ...dfLibRecommended,
+  ...neostandard({ ts: true }),
+  ...pluginVue.configs['flat/recommended'],
+  {
+    files: ['**/*.vue'],
+    languageOptions: {
+      parser: vueParser,
+      parserOptions: { parser: tseslint.parser, sourceType: 'module' }
+    }
+  },
+  { rules: { 'vue/multi-word-component-names': 'off' } }
+]
+```
+
+- `neostandard({ ts: true })` apporte le **style** (`neostandard` en devDependencies).
+- `@data-fair/lib-utils/eslint/recommended.js` est livré avec `lib-utils`, déjà installé : il bloque les imports de modules dépréciés (`@koumoul/sd-vue`, `http-errors`, `rfdc`…). Il ne fait que ça — il ne remplace pas `neostandard`.
+- `src/config/.type/` doit être ignoré : c'est du généré.
+
+> **Piège** : `"lint": "eslint . --fix"` **réécrit** les fichiers qu'il atteint. Sur une migration, tout répertoire legacy encore présent sera reformaté au premier `npm run lint`. L'ajouter aux `ignores` tant qu'il n'est pas supprimé.
+
+### Pas de `.editorconfig`
+
+Aucun dépôt maison n'en a. Sur une reprise, le supprimer — mais seulement après avoir vérifié qu'ESLint porte bien les règles de style (`neostandard`), sinon le dépôt se retrouve sans aucune convention.
+
+### tsconfig.json
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+`include` doit couvrir `tests/**` : sans lui les fichiers de test échappent au `type-check`, et l'alias `@/` n'y résout pas.
+
+### vite.config.ts
+
+```ts
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
+import vueI18n from '@intlify/unplugin-vue-i18n/vite'
+import { settingsPath } from '@data-fair/lib-vuetify/vite.js'
+import { fileURLToPath, URL } from 'node:url'
+
+export default defineConfig({
+  base: process.env.PUBLIC_URL ?? '/app/',
+  plugins: [
+    vue({ template: { transformAssetUrls } }),
+    vueI18n({}),
+    vuetify({ autoImport: true, styles: { configFile: settingsPath } })
+  ],
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  server: {
+    port: Number(process.env.PORT ?? 3000),
+    strictPort: !!process.env.PORT,
+    hmr: { port: Number(process.env.PORT ?? 3000), protocol: 'ws' }
+  }
+})
+```
+
+> **⚠️ `vueI18n({})` — sans option `include`.** Certaines applications passent `include: '.../lib-vuetify/**/*.vue'`, hérité de l'ancien `@intlify/vite-plugin-vue-i18n`. Dans `@intlify/unplugin-vue-i18n`, `include` désigne les **fichiers ressources** i18n (JSON/YAML) : le plugin tente alors de parser un SFC entier comme du JSON et le build échoue sur `SyntaxError: Unexpected token '<'` en pointant `@data-fair/lib-vuetify/ui-notif.vue`. Les blocs `<i18n>` des SFC sont pris en charge sans aucune option. Symptôme trompeur : l'erreur n'apparaît qu'une fois un composant de `lib-vuetify` réellement importé — le build passe tant que `App.vue` est un squelette.
+
+`base` vaut `/app/` par défaut, ce qu'attend `df-dev-server` ; la CI le surcharge par `PUBLIC_URL`.
+
+### Tests — Playwright, dans `tests/`
+
+**Aucun dépôt maison ne colocalise ses tests à côté des sources.** Convention : dossier `tests/`, extension `.spec.ts` (jamais `.test.ts`), Playwright découpé en **projets**.
+
+```ts
+// playwright.config.ts
+export default defineConfig({
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  outputDir: './tests/output',
+  projects: [
+    { name: 'unit', testDir: './tests/unit' },
+    { name: 'e2e', testDir: './tests/e2e', use: { ...devices['Desktop Chrome'] } }
+  ]
+})
+```
+
+```json
+{ "test": "playwright test", "test-unit": "playwright test --project unit", "test-e2e": "playwright test --project e2e" }
+```
+
+Les services n'ont pas de `webServer` (leur stack démarre hors-bande, en docker). Une application, elle, a besoin de `webServer` pour lancer Vite — et `webServer` est **global à la config**, donc il démarrerait aussi sur un run unitaire. Le conditionner plutôt que de scinder en deux fichiers de configuration.
+
+Pour les tests e2e, mocker `**/simple-directory/**` (session) et les endpoints de données, et injecter `window.APPLICATION` via `page.addInitScript` avec `writable: false` **avant** le script inline de `index.html` : en `vite` nu, `window.APPLICATION=%APPLICATION%` lève une `SyntaxError` (placeholder non substitué) que le parser ignore ensuite.
+
+> **Un test e2e qui ne peut pas échouer ne prouve rien.** Un `toHaveCount(0)` sur un élément que la configuration de test ne produit jamais passe trivialement. Écrire le **contrôle positif** en regard (même configuration, ressource valide → l'élément est présent), ou vérifier par mutation que l'assertion échoue bien quand on casse le code visé.
+
+### .gitignore
+
+```
+node_modules
+dist
+src/config/.type
+tests/output
+playwright-report
+```
+
+`src/config/.type/` est généré par `df-build-types` ; `public/config-schema.json`, lui, **est commité**.
 
 ## Schéma de configuration (VJSF)
 
