@@ -326,6 +326,7 @@ Ces fichiers ne se devinent pas et se recopient mal : reprendre celui d'une appl
 
 - `"dev": "zellij --layout .zellij.kdl"` **suppose que `.zellij.kdl` existe** — sans lui le script échoue. Les 11 applications maintenues l'ont toutes ; c'est la convention, pas une option.
 - `build-types` doit tourner **avant** `type-check` et `build` sur un clone neuf : `src/config/.type/` est git-ignoré et `src/config/index.ts` le réexporte. Ordonner la CI en conséquence (`build-types` → `lint` → `type-check` → `build`).
+- Pas de variante `--ui` en script : le flag se passe à la volée (`npm run test-e2e -- --ui`). Les services n'en déclarent pas.
 
 ### .zellij.kdl
 
