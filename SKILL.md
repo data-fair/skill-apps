@@ -564,7 +564,7 @@ en:
 </i18n>
 ```
 
-puis `const { t } = useI18n({ useScope: 'local' })` dans le `<script setup>`.
+puis `const { t } = useI18n()` dans le `<script setup>` (la portée locale est automatiquement déduite dès qu'un bloc `<i18n>` est présent).
 
 - **Activer le plugin de compilation** dans `vite.config.ts` : `import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'`, puis `VueI18nPlugin()` dans `plugins`. Sans lui les blocs `<i18n>` ne sont pas compilés. Plusieurs applications l'ont déjà installé sans s'en servir — vérifier avant de l'ajouter.
 - **Dates et durées** : `createLocaleDayjs(session.lang.value)` puis `useLocaleDayjs()`, cf. `snippets/locale-dayjs.ts`.
