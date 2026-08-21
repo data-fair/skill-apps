@@ -363,7 +363,7 @@ src/config/.type/               → généré automatiquement
 
 ### Vocabulaire, patterns et sélecteurs → skill `vjsf`
 
-Tout le générique vit dans le skill `vjsf` et n'est pas dupliqué ici : organisation en onglets (`allOf` + `title`), discrimination de type (`discriminator` + `oneOf` + `const` + `oneOfLayout` — gros point de **performance** sur les grands `oneOf`), sélecteurs dynamiques `getItems` (`url` / `expr`, règle **`size=50`** sur les URLs data-fair dont le défaut est 12), affichage conditionnel (`layout.if` / `layout.switch`), champs cachés (`layout: "none"`), arrays avancés (`itemTitle` / `itemSubtitle` / `itemCopy` / `getDefaultData`), slider soigné (`label: ""` + `slots.before` + ticks), sélecteur d'icônes MDI (`icons-mdi-latest`, URL **relative** dans une app). Les exemples prêts à copier sont dans `vjsf/references/patterns.md`.
+Tout le générique vit dans le skill `vjsf` et n'est pas dupliqué ici : organisation en onglets (`allOf` + `title`), discrimination de type (`discriminator` + `oneOf` + `const` + `oneOfLayout` — gros point de **performance** sur les grands `oneOf`), sélecteurs dynamiques `getItems` (`url` / `expr`, règle **`size=50`** sur les URLs data-fair dont le défaut est 12), affichage conditionnel (`layout.if` / `layout.switch`), champs cachés (`layout: "none"`), arrays avancés (`itemTitle` / `itemSubtitle` / `itemCopy` / `getDefaultData`), slider soigné (`label: ""` + `slots.before` + ticks), sélecteur d'icônes MDI (`icons-mdi-latest`, URL **absolue `https://koumoul.com/data-fair/api/v1/…` codée en dur — jamais relative**). Les exemples prêts à copier sont dans `vjsf/references/patterns.md`.
 
 ### Prérequis dataset déclarés par l'URL du sélecteur
 
