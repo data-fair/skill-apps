@@ -162,13 +162,14 @@ Aucun dépôt maison n'en a. Sur une reprise, le supprimer — mais seulement ap
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
 ```
+
+> **Pas de `baseUrl`** : `baseUrl` est déprécié depuis TypeScript 5/6 et sera retiré dans TS 7.0. `paths` résout automatiquement par rapport au dossier du `tsconfig.json` dès lors que les chemins cibles commencent explicitement par `./` (`"./src/*"` et non `"src/*"`).
 
 `include` doit couvrir `tests/**` : sans lui les fichiers de test échappent au `type-check`, et l'alias `@/` n'y résout pas. **C'est l'écart le plus répandu du parc** — la quasi-totalité des apps n'incluent que `src/**` et leurs tests ne sont pas type-checkés ; à corriger dès qu'on touche au dépôt. L'alias `@/*` est constant côté apps (les services utilisent `~/*` ou `#api/*` — ne pas transposer).
 

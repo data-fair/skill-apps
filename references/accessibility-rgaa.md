@@ -12,14 +12,23 @@ Conséquence pratique : la page du portail peut être parfaitement structurée e
 
 ## Structure du document — critères 9.2, 12.6
 
-`<body><div id="app"></div></body>` place tout le contenu rendu hors de toute zone de regroupement. `axe-core` remonte `region` et `landmark-one-main`.
+Le standard HTML5 et le RGAA exigent que tout le contenu principal soit contenu dans une zone de regroupement `<main>` unique par document (règles `axe-core` `region`, `landmark-one-main` et `landmark-no-duplicate-main`).
+
+**Piège du double `<main>` avec Vuetify :**
+Dans une application Vue basée sur Vuetify 3/4, le composant `<v-main>` placé dans `App.vue` génère **déjà nativement** une balise `<main class="v-main">` dans le DOM.
+
+- **Si l'application utilise `<v-main>` (cas nominal DataFair) :** `index.html` doit utiliser `<div id="app" style="height:100vh"></div>`. Mettre `<main id="app">` provoquerait l'imbrication d'un `<main>` dans un autre `<main>` (`<main id="app"> ... <main class="v-main">`), ce qui constitue une violation d'accessibilité (`landmark-main-is-top-level`).
+- **Si l'application n'utilise pas Vuetify (ou sans `<v-main>`) :** `index.html` doit utiliser `<main id="app" style="height:100vh"></main>` pour fournir le landmark principal requis.
 
 ```html
-<body><div  id="app" style="height:100vh"></div></body>   <!-- avant -->
-<body><main id="app" style="height:100vh"></main></body>  <!-- après -->
+<!-- Application Vuetify standard avec <v-main> dans App.vue -->
+<body><div id="app" style="height:100vh"></div></body>
+
+<!-- Application Vue sans composant <v-main> -->
+<body><main id="app" style="height:100vh"></main></body>
 ```
 
-Sans risque : le montage se fait sur un sélecteur d'identifiant (`app.mount('#app')`), indifférent à la balise. `<main>` a le même `display:block` que `<div>` en feuille de style UA — aucun changement visuel. Aucune imbrication possible avec le `<main>` du portail, l'iframe étant un document distinct.
+Le montage de Vue se fait sur un sélecteur d'identifiant (`app.mount('#app')`), indifférent à la balise. Aucune imbrication possible avec le `<main>` du portail hôte, l'iframe étant un document distinct.
 
 ## Langue — critères 8.3, 8.4
 
@@ -47,6 +56,10 @@ Le `<title>` déclaré dans `index.html` est statique : identique pour toutes le
 **Comme `lang`, le titre est désormais réécrit par le proxy** (`api/src/applications/proxy.ts`) : le `<title>` de la brique est remplacé par le titre de l'application servie, et inséré si la brique n'en déclare aucun. C'est donc le titre de la visualisation qu'annoncent l'onglet et les technologies d'assistance.
 
 Rien à faire côté application : le `<title>` du dépôt ne sert plus qu'au catalogue (nom de modèle lisible anglais — `Charts`, `Dashboards`, `Treemap` — jamais un slug de paquet ni le nom du dépôt), et toujours aucun appel à `document.title` à ajouter.
+
+## Type de document (DOCTYPE) — critère 8.1
+
+Tout document HTML5 doit impérativement commencer par la déclaration `<!DOCTYPE html>` sur la toute première ligne (avant tout commentaire ou espace). Elle est obligatoire pour que le navigateur fonctionne en mode de rendu standard et n'active pas le mode Quirks (critère RGAA 8.1).
 
 ## Validité du code source — critère 8.2
 
@@ -156,6 +169,13 @@ Défauts relevés sur une sous-application cartographique : champ de type combob
 
 Un rôle ARIA impose un contrat complet : nom, état, valeur, et enfants requis. Poser `role="combobox"` sans les éléments attendus produit un composant moins accessible qu'un `<select>` natif. Préférer les composants natifs ou ceux de `@data-fair/lib-vuetify`, dont le contrat est déjà tenu.
 
+### Contenu réservé aux lecteurs d'écran : utiliser `.d-sr-only` de Vuetify
+
+Lorsqu'un texte ou une région dynamique (`aria-live`) doit être accessible aux lecteurs d'écran sans être visible à l'écran (critères 1.1, 7.1), **ne pas recréer de classe CSS maison**. Vuetify intègre nativement dans ses utilitaires :
+
+- `.d-sr-only` : masque visuellement l'élément tout en le conservant dans l'arbre d'accessibilité (position absolute, clip 0, dimension 1px).
+- `.d-sr-only-focusable` : masque l'élément mais le rend visible dès qu'il reçoit le focus clavier (idéal pour les liens d'évitement).
+
 ### Cartes maplibre : partiellement accessibles d'origine
 
 maplibre pose `role="region"`, `aria-label="Map"` et `tabindex="0"` sur son canvas. Deux conséquences :
@@ -197,10 +217,11 @@ Ce que `axe-core` ne voit pas et qui doit être testé à la main : tout ce qui 
 
 ## Checklist
 
+- [ ] `<!DOCTYPE html>` en première ligne
 - [ ] pas d'attribut `lang` sur `<html>`
 - [ ] `<meta charset>` en premier dans `<head>`
 - [ ] un seul `<title>`, lisible (nom du modèle, pas un slug), et une seule `<meta name="description">`
-- [ ] `<main id="app">` et non `<div id="app">`
+- [ ] landmark `<main>` unique (`<v-main>` dans `App.vue` + `<div id="app">`, ou `<main id="app">` sans Vuetify) — pas de `<main>` imbriqués
 - [ ] nom accessible sur chaque canvas ou svg porteur d'information
 - [ ] tableau de données équivalent accessible depuis la visualisation
 - [ ] visualisation atteignable et opérable au clavier, focus visible

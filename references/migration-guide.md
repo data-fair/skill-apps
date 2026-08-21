@@ -31,7 +31,7 @@ Avant de démarrer, évaluez la complexité de l'app legacy :
 
 ### Fichier d'entrée
 
-Remplacer `app.html` (Nuxt) ou `public/index.html` (Vue CLI) par un `index.html` à la racine, **en reprenant le squelette canonique de la section « index.html — document complet » du SKILL.md** — ne pas le réinventer : pas de `lang` sur `<html>` (posé par le proxy), `<main id="app">` et non `<div>`, `<link>` vers `_theme.css` + déclaration `@layer`, `application-name` en `[a-z0-9-]`, une seule occurrence du placeholder `%APPLICATION%` (le script inline `window.APPLICATION=%APPLICATION%;`), et les métas `df:*` adaptées à l'app. Lors de la migration, purger les métas mortes (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`).
+Remplacer `app.html` (Nuxt) ou `public/index.html` (Vue CLI) par un `index.html` à la racine, **en reprenant le squelette canonique de la section « index.html — document complet » du SKILL.md** — ne pas le réinventer : `<!DOCTYPE html>` en première ligne, pas de `lang` sur `<html>` (posé par le proxy), `<div id="app">` (car `<v-main>` porte déjà le repère `<main>`), `<link>` vers `_theme.css` + déclaration `@layer`, `application-name` en `[a-z0-9-]`, une seule occurrence du placeholder `%APPLICATION%` (le script inline `window.APPLICATION=%APPLICATION%;`), et les métas `df:*` adaptées à l'app. Lors de la migration, purger les métas mortes (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`).
 
 ### État global (Vuex → Composables)
 

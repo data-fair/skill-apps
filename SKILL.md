@@ -146,18 +146,19 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
     <script>window.APPLICATION=%APPLICATION%;</script>
   </head>
   <body>
-    <main id="app" style="height:100vh"></main>
+    <div id="app" style="height:100vh"></div>
   </body>
 </html>
 ```
 
 Cinq points de ce squelette ne se devinent pas :
 
+- **`<!DOCTYPE html>` obligatoire en première ligne** (critère RGAA 8.1). Il garantit le mode de rendu standard du navigateur (évite le mode Quirks) et doit figurer tout en haut avant tout commentaire ou balise.
 - **Pas d'attribut `lang` sur `<html>`.** Le proxy filtre l'attribut déclaré puis le repose depuis la locale de la requête (`api/src/applications/proxy.ts`). Conserver le commentaire : sans lui, un agent qui régénère le fichier remettra `lang="fr"`, que tous les linters HTML réclament. **Limite connue** : le `lang` du document et la locale de l'interface sont résolus indépendamment et peuvent diverger — voir `references/accessibility-rgaa.md`. Rien à corriger côté application.
 - **`<meta charset>` en premier**, dans les 1024 premiers octets — un bloc de commentaire placé avant suffit à le repousser et à casser la validation.
 - **Un seul `<title>` et une seule `<meta name="description">`.** Les dupliquer avec un attribut `lang` pour porter l'i18n est invalide en HTML et produit deux erreurs W3C. L'i18n du catalogue passera par registry, qui porte `title` et `description` en objets `{ en, fr }`.
 - **Le `<link>` vers `_theme.css` et la déclaration `@layer`.** `/simple-directory/api/sites/_theme.css` apporte ce que `vuetifySessionOptions` ne calcule pas : les variantes de couleurs **texte à contraste corrigé** (`.text-primary`, `.text-secondary`, ... en `!important`, distinctes des couleurs brutes du thème), les couleurs de `a.simple-link` selon le thème et le fond, les `@font-face` du site et une règle `@media print`. Le chemin est absolu et sans hash : les placeholders `{SITE_PATH}` / `{THEME_CSS_HASH}` qu'utilisent les services relèvent de `serve-spa`, et le proxy data-fair ne substitue que `%APPLICATION%` — sans hash le CSS est simplement revalidé toutes les 60 s au lieu d'être mis en cache immuable, les deux routes existent côté simple-directory. La déclaration `@layer` vient avant tout style parce que Vuetify 4 livre son CSS dans des couches en cascade (`vuetify-core`, `vuetify-components`, `vuetify-final`...) : avec `@layer`, la priorité est fixée par l'**ordre de première déclaration des noms**, pas par l'ordre des règles. Sans cette ligne, cet ordre dépend du chunk CSS qui se charge en premier — instable entre le dev et le build à cause du code splitting, donc une surcharge qui fonctionne en local peut cesser de fonctionner en production. La déclarer en tête épingle l'ordre et ouvre `vuetify-overrides` / `vuetify-utilities` comme emplacements pour vos propres styles. `_theme.css`, lui, est volontairement hors couche : du CSS non layered l'emporte sur tout CSS layered, quel que soit l'ordre.
-- **`<main id="app">` et non `<div id="app">`** — cf. `references/accessibility-rgaa.md`.
+- **`<div id="app">` avec `<v-main>` (ou `<main id="app">` sans Vuetify)** : Dans une application Vuetify standard, le composant `<v-main>` dans `App.vue` rend déjà nativement un élément `<main class="v-main">` dans le DOM. Si `index.html` utilisait `<main id="app">`, le DOM contiendrait deux balises `<main>` imbriquées, ce qui est invalide (violation `landmark-main-is-top-level` / `landmark-no-duplicate-main`). Si l'application utilise `<v-main>`, `index.html` doit donc avoir `<div id="app">`. Si l'application n'utilise pas Vuetify ou pas de `<v-main>`, alors `index.html` doit porter `<main id="app">` pour fournir le repère principal requis (RGAA 9.2, 12.6).
 
 #### `<title>` et `meta name="title"` : deux choses différentes
 
@@ -537,11 +538,12 @@ Les applications sont majoritairement embarquées dans des portails du secteur p
 
 Le point à comprendre : le document servi à `/data-fair/app/<id>` est une **page web autonome**. Il n'hérite ni de la langue, ni du `<main>`, ni des titres de la page porteuse. Une visualisation qui rend dans un `<canvas>` sans alternative a un arbre d'accessibilité **vide** — un lecteur d'écran ne restitue rien, et aucun réglage de couleur n'y change quoi que ce soit.
 
-Les cinq points qui reviennent sur tout le parc :
+Les points clés qui reviennent sur tout le parc :
 
 | Point | Critères |
 |---|---|
-| `<main id="app">` et non `<div id="app">` | 9.2, 12.6 |
+| `<!DOCTYPE html>` obligatoire en première ligne d'`index.html` | 8.1 |
+| Landmark `<main>` unique (`<v-main>` dans `App.vue` + `<div id="app">`, ou `<main id="app">` sans Vuetify) — jamais de `<main>` imbriqués | 9.2, 12.6 |
 | Nom accessible + tableau de données équivalent pour tout canvas ou svg porteur d'information | 1.1, 1.6, 4.8, 4.9 |
 | Visualisation atteignable et opérable au clavier, infobulles masquables par Échap | 7.1, 7.3, 10.13, 12.11 |
 | Texte du graphique agrandissable à 200 % — le texte rasterisé d'un canvas ne l'est pas | 10.4 |
@@ -853,7 +855,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] schéma conforme au skill `vjsf` : aucun `x-*` legacy, `size=50` et `{q}`/`qSearchParam` sur les `getItems` data-fair, `discriminator` sur les `oneOf` de variantes
 - [ ] tous les libellés visibles commencent par une majuscule — `title`, `description`, options d'`enum` / `oneOf`, boutons, empty states, messages d'erreur, **y compris les chaînes en dur dans les templates**
 - [ ] `public/thumbnail.png` est présent
-- [ ] `index.html` : pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>` lisible, une seule `<meta name="description">`, `<main id="app">`, `<link>` vers `_theme.css` et déclaration `@layer`
+- [ ] `index.html` : `<!DOCTYPE html>` obligatoire, pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>` lisible, une seule `<meta name="description">`, `<div id="app">` (si `<v-main>`) ou `<main id="app">`, `<link>` vers `_theme.css` et déclaration `@layer`
 - [ ] `application-name` = nom du dépôt = nom du paquet, en `[a-z0-9-]`
 - [ ] aucune méta morte (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`)
 - [ ] accessibilité : checklist de `references/accessibility-rgaa.md` passée
