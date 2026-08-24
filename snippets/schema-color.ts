@@ -36,9 +36,15 @@ export const colorDefinition = {
         strValue: {
           title: 'Couleur',
           type: 'string',
+          // Les trois couleurs principales du thème forment le contrat minimum
+          // d'un portail : un sélecteur qui propose primary propose TOUJOURS
+          // aussi secondary et accent. Ce sont les trois couleurs qu'un
+          // administrateur de portail renseigne (cf. le mode simplifié du
+          // schéma de thème dans @data-fair/lib-common-types).
           oneOf: [
             { const: 'primary', title: 'Primaire' },
-            { const: 'secondary', title: 'Secondaire' }
+            { const: 'secondary', title: 'Secondaire' },
+            { const: 'accent', title: 'Accentuée' }
           ],
           default: 'primary'
         }
