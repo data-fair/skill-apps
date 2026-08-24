@@ -109,7 +109,7 @@ Formulaire de configuration d'une autre application DataFair (utilisé dans les 
 - Les paramètres `*_eq` et `*_in` fonctionnent comme des **filtres de contexte** : ils restreignent les données affichées dans l'embed sans permettre à l'utilisateur de les modifier.
 - Le paramètre `draft` permet de visualiser les données en mode brouillon (utile pendant la configuration de l'app parente).
 - Le paramètre `q` permet de pré-remplir une recherche textuelle dans l'embed.
-- L'**accessKey** doit être propagée aux embeds via l'attribut `:access-key` du composant `d-frame` pour maintenir les droits d'accès sur les données.
+- L'**accessKey** doit être propagée aux embeds pour maintenir les droits d'accès sur les données. Ce n'est pas un attribut de `d-frame` mais un préfixe de l'id de la ressource dans le chemin de l'URL, interprété côté data-fair : `/data-fair/embed/dataset/{accessKey}%3A{datasetId}/table`, `/data-fair/app/{accessKey}%3A{appId}`.
 - Les filtres de contexte (`*_eq`, `*_in`) sont cumulatifs : plusieurs filtres peuvent être combinés pour restreindre les données.
 
 ## Conventions d'émission par type d'embed

@@ -14,13 +14,16 @@ export function useAccessKey (): { accessKey: Ref<string | null> } {
   return { accessKey }
 }
 
-// Propagation aux embeds d-frame via la prop :access-key
+// Propagation aux embeds : `d-frame` n'a PAS d'attribut access-key. C'est
+// data-fair qui interprète la clé, en préfixe de l'id de la ressource dans
+// le chemin de l'URL ({accessKey}%3A{id}) :
 //
 // <d-frame
-//   :src="`/embed/dataset/${datasetId}/table`"
+//   :src="`/data-fair/embed/dataset/${accessKey ? accessKey + '%3A' : ''}${datasetId}/table`"
 //   :adapter="dFrameAdapter"
-//   :access-key="accessKey"
 // />
+//
+// Même mécanique pour les apps : /data-fair/app/{accessKey}%3A{appId}
 //
 // L'accessKey n'a PAS besoin d'être propagée aux appels useFetch de l'app :
 // - Les appels API sont authentifiés par le cookie de session

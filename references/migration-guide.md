@@ -186,14 +186,13 @@ import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-glob
 const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
 ```
 
-Dans le template, remplacer `<v-iframe>` par `<d-frame>` avec l'adapter et l'accessKey :
+Dans le template, remplacer `<v-iframe>` par `<d-frame>` avec l'adapter. L'accessKey n'est **pas** une prop de `d-frame` (le composant ne la connaît pas) : c'est data-fair qui l'interprète, en préfixe de l'id de la ressource dans le chemin de l'URL (`{accessKey}%3A{id}`) :
 
 ```vue
 <template>
   <d-frame
-    :src="`/embed/dataset/${datasetId}/table`"
+    :src="`/data-fair/embed/dataset/${accessKey ? accessKey + '%3A' : ''}${datasetId}/table`"
     :adapter="dFrameAdapter"
-    :access-key="accessKey"
   />
 </template>
 ```

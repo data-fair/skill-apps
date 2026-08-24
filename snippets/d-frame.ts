@@ -29,16 +29,17 @@ const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
 //   <d-frame :src="..." :adapter="dFrameAdapter" resize="auto" />
 // Voir SKILL.md > "Intégration iframe / d-frame" > "Redimensionnement".
 
-// Dans le composable config, exposer dFrameAdapter et accessKey
-// Dans le composant, utiliser d-frame avec l'adapter et l'accessKey
+// Dans le composable config, exposer dFrameAdapter et accessKey.
+// Dans le composant, utiliser d-frame avec l'adapter ; l'accessKey n'est PAS
+// un attribut de d-frame mais un préfixe de l'id dans le chemin de l'URL
+// ({accessKey}%3A{id}), interprété côté data-fair (voir snippets/access-key.ts).
 
 // Exemple d'utilisation dans un composant Vue :
 /*
 <template>
   <d-frame
-    :src="`/embed/dataset/${datasetId}/table`"
+    :src="`/data-fair/embed/dataset/${accessKey ? accessKey + '%3A' : ''}${datasetId}/table`"
     :adapter="dFrameAdapter"
-    :access-key="accessKey"
   />
 </template>
 
@@ -55,16 +56,14 @@ const { dFrameAdapter, accessKey } = useConfig()
   <v-row>
     <v-col cols="6">
       <d-frame
-        :src="`/embed/dataset/${mainDatasetId}/table`"
+        :src="`/data-fair/embed/dataset/${accessKey ? accessKey + '%3A' : ''}${mainDatasetId}/table`"
         :adapter="dFrameAdapter"
-        :access-key="accessKey"
       />
     </v-col>
     <v-col cols="6">
       <d-frame
-        :src="`/embed/dataset/${secondaryDatasetId}/map`"
+        :src="`/data-fair/embed/dataset/${accessKey ? accessKey + '%3A' : ''}${secondaryDatasetId}/map`"
         :adapter="dFrameAdapter"
-        :access-key="accessKey"
       />
     </v-col>
   </v-row>

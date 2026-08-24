@@ -731,9 +731,8 @@ const dFrameAdapter = createDFrameAdapter(reactiveSearchParams)
 ```vue
 <template>
   <d-frame
-    :src="`/embed/dataset/${datasetId}/table`"
+    :src="`/data-fair/embed/dataset/${accessKey ? accessKey + '%3A' : ''}${datasetId}/table`"
     :adapter="dFrameAdapter"
-    :access-key="accessKey"
   />
 </template>
 
@@ -744,7 +743,7 @@ const { dFrameAdapter, accessKey } = useConfig()
 </script>
 ```
 
-L'adapter synchronise automatiquement les paramètres de recherche entre l'app parent et l'embed. L'accessKey propage les droits d'accès.
+L'adapter synchronise automatiquement les paramètres de recherche entre l'app parent et l'embed. L'accessKey propage les droits d'accès : ce n'est **pas** une prop de `d-frame` (le composant n'a pas d'attribut `access-key`) mais un préfixe de l'id de la ressource dans le chemin de l'URL (`{accessKey}%3A{id}`), interprété côté data-fair — même mécanique pour `/data-fair/app/{accessKey}%3A{appId}`.
 
 #### Redimensionnement
 
