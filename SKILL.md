@@ -217,22 +217,34 @@ C'est aussi ce qui rend un renommage possible. Le nom du dépôt est invisible p
 
 ### Capture d'écran / miniatures
 
-DataFair capture les apps (miniature de galerie, bouton « capture » du backoffice, print PDF) via un service headless qui charge l'app dans un navigateur. L'app peut influencer le timing de la capture.
+DataFair capture les apps (miniature de galerie et de carte, bouton « Capturer » du back-office et des portails, aperçu d'un élément de page, print PDF) via le service `capture` : Chrome headless qui charge **l'application servie nue** (`{publicUrl}/app/{id}`, sans le portail autour) et photographie **le viewport** — ce qui dépasse est coupé, la capture n'est pas un rendu pleine page.
 
-**Stratégie d'attente du service** :
-1. Si l'app appelle `window.triggerCapture(animationSupported?)` → capture immédiate.
-2. Sinon, après network idle : attente de `triggerCapture` pendant `df:capture-delay` secondes (si la meta est présente), sinon +1 s de sécurité puis capture.
-3. Timeout global du service en dernier recours.
+**Référence complète : `references/capture.md`** (routes et paramètres du service, timeouts, mode gif, cache de la miniature, injection d'état, simulation par le dev-server, checklist). À lire dès qu'on touche au timing de rendu, à l'animation ou à `index.html`.
+
+> **Tester en local** : `@data-fair/dev-server` ≥ 2.4.0 reproduit la stratégie d'attente du service — les deux contextes (vignette par défaut / capture manuelle), le format png ou gif, `df:capture-delay`, `x-capture`, les budgets du mode gif — et signale tout en `[capture]` dans la console. Sur une version antérieure la simulation anime toujours et ignore `df:capture-delay` : **mettre à jour la dépendance** avant de conclure quoi que ce soit du comportement dev. Détail et différences résiduelles dans `references/capture.md` § 8.
+
+**Stratégie d'attente du service** (`capture/api/utils/page.ts`) :
+1. Si l'app appelle `window.triggerCapture(animationSupported?)` → capture immédiate. Seul chemin rapide.
+2. Sinon, après network idle : attente de `triggerCapture` pendant `df:capture-delay` **secondes** (si la méta est présente), sinon +1 s de sécurité puis capture.
+3. Timeout du service en dernier recours (`screenshotTimeout`, 20 s par défaut).
 
 | Meta / mécanisme | Rôle |
 |---|---|
-| `window.triggerCapture(animationSupported?)` | Fonction injectée par le service dans la page. L'appeler dès que la visu est **réellement rendue** (données chargées, carte prête). Passer `true` si l'app supporte le mode animation (GIF). |
-| `<meta name="df:capture-delay" content="2">` | Après network idle, attend `triggerCapture` jusqu'à N secondes avant de capturer quand même. |
+| `window.triggerCapture(animationSupported?)` | Fonction exposée par puppeteer, installée **avant** le `goto` donc disponible dès le premier script : `!!window.triggerCapture` est un test « suis-je dans une capture ? » fiable. L'appeler dès que la visu est **réellement rendue**. Passer `true` si l'app supporte le mode animation (gif). **Résout vers un booléen** (`animate`) : `Promise<boolean>`, à `await`. |
+| `window.animateCaptureFrame()` | À définir **avant** tout appel à `triggerCapture(true)` : en mode gif le service l'appelle aussitôt, et une fonction absente fait échouer toute la capture. Avance le rendu d'un pas de 1/15 s, retourne `true` à la fin. Borner le nombre d'images (budget : 1800 images **et** 40 s d'horloge murale). |
+| `<meta name="df:capture-delay" content="2">` | Après network idle, attend `triggerCapture` jusqu'à N **secondes** avant de capturer quand même. Plafonné à `screenshotTimeout` : une valeur en millisecondes (`content="1500"` sur atelier-carto) équivaut à « attendre 20 s ». Valeurs saines : 1 à 5. |
 | `<meta name="x-capture" content="trigger">` | **Déprécié** (rétro-compat) : attend `triggerCapture` après network idle, jusqu'au timeout. Remplacer par `df:capture-delay` + appel explicite. |
-| `df:capture-width` / `df:capture-height` | Dimensions de la capture, en pixels. **Trois niveaux de défauts** : le service capture retient 800×450 si l'appelant n'envoie rien (`capture/api/routers/capture.ts`), le dialogue du backoffice pré-remplit `meta \|\| 800×450`, les portails envoient `meta \|\| 1280×720` (`portals/.../application-capture.vue`). Même ratio 16:9, résolutions différentes. À ne déclarer que si le rendu impose un format précis — sinon laisser les appelants décider. |
-| `?thumbnail=true` | Paramètre ajouté à l'URL cible pour la miniature par défaut — l'app peut adapter son rendu (masquer contrôles, légendes, etc.). |
+| `df:capture-width` / `df:capture-height` | Dimensions en pixels. **Trois niveaux de défauts, deux ratios** : le service retient 800×450 si l'appelant n'envoie rien (`capture/api/routers/capture.ts`), le dialogue du back-office préremplit `meta \|\| 800×450`, les portails envoient `meta \|\| 1280×720` (`portals/.../application-capture.vue`). La **miniature par défaut de data-fair est 1050×450 (ratio 21/9) codée en dur** (`api/src/misc/utils/capture.ts`) et **ignore ces métas**. À ne déclarer que si le rendu impose un format précis. |
+| `?thumbnail=true` | Ajouté à l'URL cible **uniquement pour la miniature par défaut** (requête sans autre paramètre que `updatedAt`) — pas pour une capture manuelle, qui a pourtant `triggerCapture`. Signifie « vignette », pas « contexte de capture ». |
+| `app_*` | Tout paramètre de requête préfixé `app_` est dépréfixé et reporté sur l'URL cible : **seul canal d'injection d'état**. Un état absent des paramètres d'URL n'est pas capturable — le tenir dans `reactiveSearchParams`, et déclarer `df:sync-state` pour que le dialogue du back-office propose de le choisir. |
 
-> **⚠️ Piège** : si l'app annonce une attente explicite (`df:capture-delay` ou `x-capture: trigger`) mais n'appelle jamais `triggerCapture` (ex. appel conditionné à une ressource qui n'existe pas), chaque capture attend le **timeout complet** du service. Appeler `triggerCapture` de façon fiable — y compris en cas d'erreur de chargement.
+**Que masquer dans une capture ?** Le critère n'est pas « c'est cliquable » mais **« est-ce que ça porte de l'information dans une image fixe ? »**. Masquer les commandes dont l'image ne peut rien faire et qui ne disent rien de l'état : boutons lecture/pause, curseur d'animation, boutons d'export, barres d'outils, infobulles, aides « cliquez pour… ». **Garder** ce qui documente l'état capturé : barre de filtres avec ses valeurs courantes, période sélectionnée, légende, titre, unité. `app-dashboards` n'a aucun rendu spécifique à la capture, et c'est le bon choix — ses filtres affichent les valeurs qui ont produit les graphiques. Le dépouillement plus poussé se justifie surtout sous `?thumbnail=true` (vignette de galerie de 1050×450), pas sur une capture manuelle qu'un utilisateur a demandée pour illustrer un état précis. Détail dans `references/capture.md` § 6 bis.
+
+> **⚠️ Piège de timing** : si l'app annonce une attente explicite (`df:capture-delay` ou `x-capture: trigger`) mais n'appelle jamais `triggerCapture` (ex. appel conditionné à une ressource qui n'existe pas), chaque capture attend le **timeout complet** du service. Appeler `triggerCapture` de façon fiable — y compris sur résultat vide, erreur de données et configuration invalide.
+
+> **⚠️ Piège de contenu — le plus fréquent** : la miniature par défaut est une **image fixe prise à l'état initial** de l'app. Une visu qui démarre vide (animation à t=0, carte pas encore centrée, formulaire pas encore rempli) produit une vignette vide, affichée partout dans le back-office et les portails avant même l'ouverture de l'app. Utiliser le booléen retourné par `triggerCapture` : `false` = image fixe, donc se placer sur l'état **final ou représentatif** ; `true` = gif, donc repartir du début. Le dev-server ≥ 2.4.0 sait simuler le chemin png (format `png` dans son dialogue de capture) ; les versions antérieures animaient toujours et ne montraient jamais ce cas.
+
+> **⚠️ 450 px est la plus petite hauteur à laquelle l'app est rendue en production** (1050×450). C'est la contrainte de densité de référence : vérifier la lisibilité à cette taille, avec la configuration **la plus dense** que le schéma autorise, pas seulement avec les valeurs par défaut.
 
 > **Règle de migration** : `x-capture` est déprécié — lors de toute migration ou maintenance d'app existante, le **retirer** et le remplacer par `df:capture-delay` + un appel explicite à `window.triggerCapture()` (fiable, y compris en erreur). Une app qui garde `x-capture` sans jamais appeler `triggerCapture` fait attendre le timeout du service de capture à chaque capture backoffice (constaté sur ~100 base apps en prod, 2 600+ apps configurées).
 
@@ -859,6 +871,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] `application-name` = nom du dépôt = nom du paquet, en `[a-z0-9-]`
 - [ ] aucune méta morte (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`)
 - [ ] accessibilité : checklist de `references/accessibility-rgaa.md` passée
+- [ ] capture : checklist de `references/capture.md` passée — `triggerCapture` appelé sur tous les chemins terminaux, rendu adapté au contexte de capture, état parlant plutôt qu'initial, lisible à 1050×450
 - [ ] `useFetch` utilisé partout (pas axios / ofetch direct)
 - [ ] Réactivité query params OK
 - [ ] Réactivité config draft OK (test mode draft dans DataFair)
