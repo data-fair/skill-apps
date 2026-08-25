@@ -284,7 +284,16 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 > ```ts
 > async function init () {
 >   const session = await createSession({ directoryUrl: '/simple-directory', siteInfo: true })
->   const i18n = createI18n({ legacy: false, locale: session.lang.value, fallbackLocale: 'en' })
+>   const percentFormats = {
+>     percent: { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 },
+>     percentPrecise: { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }
+>   } as const
+>   const i18n = createI18n({
+>     legacy: false,
+>     locale: session.lang.value,
+>     fallbackLocale: 'en',
+>     numberFormats: { fr: percentFormats, en: percentFormats }
+>   })
 >   const app = createApp(App)
 >   app.use(i18n)
 >   ...
@@ -292,6 +301,7 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 > ```
 > - **`legacy: false`** — sans lui, vue-i18n 11 démarre en mode legacy : déprécié, retiré en v12, et un avertissement s'affiche dans la console de dev.
 > - **`fallbackLocale: 'en'`** — le défaut de `fallbackLocale` est la valeur de `locale`, donc *aucun repli*. simple-directory sert six langues (`fr, en, es, pt, it, de`) alors que les blocs `<i18n>` de `lib-vuetify` n'ont que `fr` et `en` : sans repli, une session `de` affiche les clés brutes (`noResult` au lieu de « Aucun résultat »).
+> - **`numberFormats`** — uniquement les pourcentages, cf. « Nombres et pourcentages » plus bas. Rien à déclarer pour les nombres simples : `n(valeur)` nu est déjà un `Intl.NumberFormat` de la locale de session.
 > - **Ne jamais écrire `i18n.global.locale.value = ...`** — en mode legacy `i18n.global.locale` est une string, et l'assignation lève `TypeError: Cannot create property 'value' on string`. C'est de toute façon inutile : un changement de langue ou de thème recharge le document (`session.ts`, `watch(() => state.lang, () => goTo(null))`).
 > Voir `snippets/main.ts` pour le bootstrap complet.
 
@@ -582,8 +592,84 @@ puis `const { t } = useI18n()` dans le `<script setup>` (la portée locale est a
 
 - **Activer le plugin de compilation** dans `vite.config.ts` : `import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'`, puis `VueI18nPlugin()` dans `plugins`. Sans lui les blocs `<i18n>` ne sont pas compilés. Plusieurs applications l'ont déjà installé sans s'en servir — vérifier avant de l'ajouter.
 - **Dates et durées** : `createLocaleDayjs(session.lang.value)` puis `useLocaleDayjs()`, cf. `snippets/locale-dayjs.ts`.
+- **Nombres et pourcentages** : `n()` plutôt que `toLocaleString()`, voir ci-dessous — c'est l'écart le plus fréquent et le plus silencieux du parc.
 - **Ne pas porter l'i18n du catalogue dans `index.html`** (un seul `<title>`, une seule `<meta name="description">`) : elle passera par registry, qui porte `title` et `description` en objets `{ en, fr }`.
 - **Casse des libellés** : la règle de majuscule initiale s'applique à toutes les chaînes visibles, traduites ou en dur — voir « Libellés : majuscule initiale, casse de phrase » dans la section VJSF.
+
+#### Nombres et pourcentages : `n()`, jamais `toLocaleString()` nu
+
+`n()` est à `t()` ce que les nombres sont aux messages : même origine (`useI18n()`, ou `$n` dans un
+template), même locale — celle de l'instance i18n, que `main.ts` a câblée sur `session.lang`. Aucun
+point d'usage n'a donc à connaître la langue. En revanche **`d()` ne sert pas ici** : les dates et
+les durées passent par dayjs (`createLocaleDayjs` / `useLocaleDayjs`, cf. `snippets/locale-dayjs.ts`),
+qui couvre le formatage relatif et l'arithmétique que `Intl.DateTimeFormat` ne donne pas.
+
+```ts
+const { t, n } = useI18n()
+n(31546)                       // « 31 546 » en fr, « 31,546 » en en
+n(part / total, 'percent')     // « 45,6 % » en fr, « 45.6% » en en
+```
+
+**⚠️ `toLocaleString()` et `toFixed()` appelés sans argument sont le défaut le plus répandu du parc**,
+et le plus silencieux : ils passent la revue, passent les tests, et ne se voient qu'à l'écran.
+
+- `valeur.toLocaleString()` sans locale suit **`navigator.language`**, pas `session.lang`. Le
+  développeur, le testeur et la CI ont tous un navigateur français : le bug n'apparaît que chez
+  l'utilisateur dont le navigateur est en anglais, dans une interface française.
+- `(part * 100 / total).toFixed(2) + '%'` produit **toujours** un point décimal et **jamais** l'espace
+  insécable que le français impose avant le signe pourcent, quelle que soit la langue.
+
+Les deux cohabitaient dans la même infobulle de `data-fair-sankey` : `31,546` suivi de `45.66%`, en
+français. `data-fair-sunburst` portait le second.
+
+**Ce qu'il y a à déclarer, et ce qu'il n'y a pas à déclarer.** `Intl` fait déjà l'essentiel :
+
+| Besoin | Déclaration |
+|---|---|
+| Nombre simple, **groupé par trois** | **Aucune.** `useGrouping` vaut déjà `auto`, `n(v)` rend `31 546` (espace fine insécable U+202F en français) |
+| Décimales d'un nombre simple | Aucune — trois chiffres maximum par défaut |
+| **Pourcentage** | **Nécessaire** : `style: 'percent'` seul rend `maximumFractionDigits: 0`, donc `46 %` au lieu de `45,7 %` |
+
+D'où deux entrées seulement, posées **directement dans `createI18n`** — pas de module utilitaire, il
+n'y a rien à partager entre fichiers :
+
+```ts
+// les options sont indépendantes de la locale : Intl en déduit les séparateurs, la
+// marque décimale et l'espace que le français met avant le signe pourcent, donc le
+// même jeu est enregistré pour toutes les langues
+const percentFormats = {
+  percent: { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 },
+  percentPrecise: { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }
+} as const
+const i18n = createI18n({
+  legacy: false,
+  locale: session.lang.value,
+  fallbackLocale: 'en',
+  numberFormats: { fr: percentFormats, en: percentFormats }
+})
+```
+
+Un composant qui porte son propre bloc `<i18n>` est en portée locale et **résout quand même** les
+`numberFormats` globaux par la chaîne de repli — vérifié sur sankey et sunburst.
+
+Points de détail qui comptent :
+
+- **Passer un ratio, pas un pourcentage.** `style: 'percent'` multiplie par 100 lui-même et pose le
+  signe. C'est ce qui évite d'avoir à connaître la règle typographique de chaque langue : `45,66 %`
+  avec une espace insécable (U+00A0) en français, `45.66%` sans espace en anglais.
+- **Garder le dénominateur derrière un test** : `total ? part / total : 0`, sinon un total nul rend
+  `NaN %`.
+- **Le `%` sort des messages i18n.** `ofTotal: "{pct} du total"`, pas `"{pct}% du total"` : le signe
+  et son espace viennent du format.
+- **Un composable ne peut pas appeler `useI18n()`.** Lui injecter les formateurs depuis le composant
+  plutôt que de le laisser produire du texte visible lui-même.
+- `toLocaleString(session.lang.value)` **marche aussi**, mais oblige à faire circuler la langue
+  jusqu'à chaque appel — exactement ce qu'on cherche à éviter — et à répéter les options du
+  pourcentage à chaque endroit. Préférer `n()`.
+
+**Test de non-régression** : asserter que `navigator.language` vaut bien `en-US` dans le test, et que
+la sortie est française — c'est la seule façon de distinguer un formatage correct d'un formatage qui
+marche par coïncidence sur la machine du développeur.
 
 ### États de chargement et d'erreur (UX)
 
@@ -878,6 +964,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] Thème dynamique OK : clair, sombre **et** contraste renforcé (`hc`, `hc-dark`)
 - [ ] police du site câblée : `settingsPath` de `@data-fair/lib-vuetify/vite.js` en `configFile`, et `main.ts` qui importe `@data-fair/lib-vuetify/style/global.scss` et **pas** `vuetify/styles`
 - [ ] `createI18n` créé après la session, avec `legacy: false` et `fallbackLocale: 'en'`, sans réassignation de `i18n.global.locale`
+- [ ] Nombres affichés via `n()` / `$n`, jamais `toLocaleString()` ni `toFixed()` nus ; formats de pourcentage déclarés dans `createI18n`
 - [ ] Erreurs de config affichées (pas de crash)
 - [ ] Layout responsive
 

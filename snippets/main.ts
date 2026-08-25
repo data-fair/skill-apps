@@ -37,7 +37,21 @@ async function init () {
   //   n'ont que fr et en : sans repli, une session de affiche les clés brutes.
   // - ne JAMAIS réassigner i18n.global.locale.value : en legacy c'est une string
   //   (TypeError), et c'est inutile car un changement de langue recharge la page.
-  const i18n = createI18n({ legacy: false, locale: session.lang.value, fallbackLocale: 'en' })
+  // - numberFormats : uniquement les pourcentages. Intl groupe déjà par trois et
+  //   prend la marque décimale de la locale, mais style 'percent' seul arrondit à
+  //   l'unité (46 % pour 0.4566). Les options sont indépendantes de la locale, donc
+  //   le même jeu est enregistré pour toutes les langues. Un nombre simple ne
+  //   demande rien : n(valeur) suffit.
+  const percentFormats = {
+    percent: { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 },
+    percentPrecise: { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  } as const
+  const i18n = createI18n({
+    legacy: false,
+    locale: session.lang.value,
+    fallbackLocale: 'en',
+    numberFormats: { fr: percentFormats, en: percentFormats }
+  })
 
   const vuetify = createVuetify({
     ...vuetifySessionOptions(session),
