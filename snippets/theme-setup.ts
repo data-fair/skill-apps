@@ -3,9 +3,14 @@ import { vuetifySessionOptions } from '@data-fair/lib-vuetify'
 import { createVuetify } from 'vuetify'
 
 async function setupTheme () {
-  // siteInfo: true est obligatoire : vuetifySessionOptions lève
-  // 'requires fetching site info in session util' si session.site.value est nul.
-  const session = await createSession({ directoryUrl: '/simple-directory', siteInfo: true })
+  // vuetifySessionOptions lève 'requires fetching site info in session util' si
+  // session.site.value est nul. Le <script> _public.js d'index.html pose
+  // window.__PUBLIC_SITE_INFO, lu sans fetch ; siteInfo déclenche refreshSiteInfo,
+  // déprécié, et ne reste qu'en repli si le script n'a pas été servi.
+  const session = await createSession({
+    directoryUrl: '/simple-directory',
+    siteInfo: !window.__PUBLIC_SITE_INFO
+  })
   const vuetify = createVuetify(vuetifySessionOptions(session))
   return vuetify
 }
@@ -49,7 +54,9 @@ async function setupTheme () {
 // Vérification : le CSS buildé doit contenir font-family:var(--d-body-font-family)
 // et non Roboto.
 
-// Alternative non dépréciée à siteInfo: true — laisser simple-directory injecter
-// window.__PUBLIC_SITE_INFO, ce que fait chaque service, en ajoutant dans index.html :
+// Le global lu ci-dessus vient de simple-directory, ce que fait chaque service, via
+// cette ligne d'index.html :
 // <script src="/simple-directory/api/sites/_public.js"></script>
-// la session le lit alors sans fetch bloquant au démarrage.
+// À déclarer dans types.d.ts plutôt qu'à lire en (window as any) :
+// import type { FullSiteInfo } from '@data-fair/lib-vue/session.js'
+// declare global { interface Window { __PUBLIC_SITE_INFO?: FullSiteInfo } }

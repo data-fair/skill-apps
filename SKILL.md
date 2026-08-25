@@ -129,6 +129,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 
     <style>@layer vuetify-core, vuetify-components, vuetify-overrides, vuetify-utilities, vuetify-final;</style>
     <link href="/simple-directory/api/sites/_theme.css" rel="stylesheet">
+    <script src="/simple-directory/api/sites/_public.js"></script>
 
     <title>Charts</title><!-- nom du modèle : le proxy le remplace par le titre de l'application -->
 
@@ -151,13 +152,14 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 </html>
 ```
 
-Cinq points de ce squelette ne se devinent pas :
+Six points de ce squelette ne se devinent pas :
 
 - **`<!DOCTYPE html>` obligatoire en première ligne** (critère RGAA 8.1). Il garantit le mode de rendu standard du navigateur (évite le mode Quirks) et doit figurer tout en haut avant tout commentaire ou balise.
 - **Pas d'attribut `lang` sur `<html>`.** Le proxy filtre l'attribut déclaré puis le repose depuis la locale de la requête (`api/src/applications/proxy.ts`). Conserver le commentaire : sans lui, un agent qui régénère le fichier remettra `lang="fr"`, que tous les linters HTML réclament. **Limite connue** : le `lang` du document et la locale de l'interface sont résolus indépendamment et peuvent diverger — voir `references/accessibility-rgaa.md`. Rien à corriger côté application.
 - **`<meta charset>` en premier**, dans les 1024 premiers octets — un bloc de commentaire placé avant suffit à le repousser et à casser la validation.
 - **Un seul `<title>` et une seule `<meta name="description">`.** Les dupliquer avec un attribut `lang` pour porter l'i18n est invalide en HTML et produit deux erreurs W3C. L'i18n du catalogue passera par registry, qui porte `title` et `description` en objets `{ en, fr }`.
 - **Le `<link>` vers `_theme.css` et la déclaration `@layer`.** `/simple-directory/api/sites/_theme.css` apporte ce que `vuetifySessionOptions` ne calcule pas : les variantes de couleurs **texte à contraste corrigé** (`.text-primary`, `.text-secondary`, ... en `!important`, distinctes des couleurs brutes du thème), les couleurs de `a.simple-link` selon le thème et le fond, les `@font-face` du site et une règle `@media print`. Le chemin est absolu et sans hash : les placeholders `{SITE_PATH}` / `{THEME_CSS_HASH}` qu'utilisent les services relèvent de `serve-spa`, et le proxy data-fair ne substitue que `%APPLICATION%` — sans hash le CSS est simplement revalidé toutes les 60 s au lieu d'être mis en cache immuable, les deux routes existent côté simple-directory. La déclaration `@layer` vient avant tout style parce que Vuetify 4 livre son CSS dans des couches en cascade (`vuetify-core`, `vuetify-components`, `vuetify-final`...) : avec `@layer`, la priorité est fixée par l'**ordre de première déclaration des noms**, pas par l'ordre des règles. Sans cette ligne, cet ordre dépend du chunk CSS qui se charge en premier — instable entre le dev et le build à cause du code splitting, donc une surcharge qui fonctionne en local peut cesser de fonctionner en production. La déclarer en tête épingle l'ordre et ouvre `vuetify-overrides` / `vuetify-utilities` comme emplacements pour vos propres styles. `_theme.css`, lui, est volontairement hors couche : du CSS non layered l'emporte sur tout CSS layered, quel que soit l'ordre.
+- **Le `<script>` vers `_public.js`.** `/simple-directory/api/sites/_public.js` pose `window.__PUBLIC_SITE_INFO`, que la session lit sans requête. Sans lui, `createSession({ siteInfo: true })` retombe sur `refreshSiteInfo`, que la lib marque comme déprécié, et paie un fetch bloquant avant le premier rendu. C'est un `<script>` classique dans le `<head>`, donc exécuté avant le module `main.ts`, qui est différé : le global est garanti posé au moment où `createSession` le teste. Chemin absolu et sans hash, comme `_theme.css`.
 - **`<div id="app">` avec `<v-main>` (ou `<main id="app">` sans Vuetify)** : Dans une application Vuetify standard, le composant `<v-main>` dans `App.vue` rend déjà nativement un élément `<main class="v-main">` dans le DOM. Si `index.html` utilisait `<main id="app">`, le DOM contiendrait deux balises `<main>` imbriquées, ce qui est invalide (violation `landmark-main-is-top-level` / `landmark-no-duplicate-main`). Si l'application utilise `<v-main>`, `index.html` doit donc avoir `<div id="app">`. Si l'application n'utilise pas Vuetify ou pas de `<v-main>`, alors `index.html` doit porter `<main id="app">` pour fournir le repère principal requis (RGAA 9.2, 12.6).
 
 #### `<title>` et `meta name="title"` : deux choses différentes
@@ -274,16 +276,33 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 
 > Les exemples de schéma génériques (onglets, discriminator, `getItems`, arrays, conditionnels, champs cachés, slider, sélecteur d'icônes) vivent dans le **skill `vjsf`** (`vjsf/references/patterns.md`).
 
-> **⚠️ Attention : `createSession` est asynchrone, et `siteInfo` n'est pas optionnel**
-> `createSession({ siteInfo: true })` fetch les infos du site (thème, couleurs, locale) via API. Il **doit être `await`** avant d'appeler `vuetifySessionOptions(session)`, qui lève `vuetifySessionOptions requires fetching site info in session util` si `session.site.value` est nul. Ne jamais appeler `createSession` de manière synchrone en dehors d'une fonction `async`.
-> À noter : la lib marque `refreshSiteInfo` — ce que déclenche `siteInfo: true` — comme déprécié. La voie moderne, celle des services, est de laisser simple-directory injecter `window.__PUBLIC_SITE_INFO` en ajoutant `<script src="/simple-directory/api/sites/_public.js"></script>` dans `index.html` ; la session le lit alors sans fetch bloquant. Comme pour `_theme.css`, le chemin est absolu et sans hash.
+> **⚠️ Attention : `createSession` est asynchrone, et les infos du site ne sont pas optionnelles**
+> `vuetifySessionOptions(session)` lève `vuetifySessionOptions requires fetching site info in session util` si `session.site.value` est nul : la session doit avoir ses infos de site — thème, couleurs — avant cet appel. `createSession` **doit donc être `await`**, jamais appelé de manière synchrone en dehors d'une fonction `async`.
+> **Deux chemins pour les fournir, et un seul est prescrit.** Le `<script>` vers `_public.js` dans `index.html` pose `window.__PUBLIC_SITE_INFO`, que la session lit sans requête ; l'option `siteInfo: true` déclenche `refreshSiteInfo`, que la lib marque comme déprécié et qui coûte un fetch bloquant. Poser le script et ne garder l'option qu'en repli :
+> ```ts
+> siteInfo: !window.__PUBLIC_SITE_INFO
+> ```
+> Déclarer le global dans `types.d.ts` plutôt que de le lire en `(window as any)` :
+> ```ts
+> import type { FullSiteInfo } from '@data-fair/lib-vue/session.js'
+> declare global {
+>   interface Window {
+>     // posé par _public.js, lu par la session à la place du fetch déprécié
+>     __PUBLIC_SITE_INFO?: FullSiteInfo
+>   }
+> }
+> ```
+> **En test**, un mock qui renvoie du JSON pour tout `**/simple-directory/**` sert du JSON pour `_public.js` aussi : le script n'exécute rien, le global reste vide et la suite repasse en silence par le chemin déprécié. Servir `_public.js` en `application/javascript` avec pour corps `window.__PUBLIC_SITE_INFO = {…}`.
 
 > **⚠️ Attention : créer `createI18n` après la session, et ne jamais réassigner la locale**
 > `useI18n()` commence par `getCurrentInstance()` et lève `MUST_BE_CALL_SETUP_TOP` sinon : il ne peut s'exécuter que dans un `setup()`. Dans un `<script setup>`, le code de premier niveau **est** le corps de `setup()`, évalué à l'instanciation du composant et non à l'import — les composants de `@data-fair/lib-vuetify` n'imposent donc aucune création au niveau module. La seule contrainte réelle est `app.use(i18n)` avant `.mount()`.
 > **Pattern correct**, celui des services (`catalogs`, `processings`, `metrics`, `events`) :
 > ```ts
 > async function init () {
->   const session = await createSession({ directoryUrl: '/simple-directory', siteInfo: true })
+>   const session = await createSession({
+>     directoryUrl: '/simple-directory',
+>     siteInfo: !window.__PUBLIC_SITE_INFO
+>   })
 >   const percentFormats = {
 >     percent: { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 },
 >     percentPrecise: { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }

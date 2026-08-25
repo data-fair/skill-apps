@@ -31,7 +31,7 @@ Avant de démarrer, évaluez la complexité de l'app legacy :
 
 ### Fichier d'entrée
 
-Remplacer `app.html` (Nuxt) ou `public/index.html` (Vue CLI) par un `index.html` à la racine, **en reprenant le squelette canonique de la section « index.html — document complet » du SKILL.md** — ne pas le réinventer : `<!DOCTYPE html>` en première ligne, pas de `lang` sur `<html>` (posé par le proxy), `<div id="app">` (car `<v-main>` porte déjà le repère `<main>`), `<link>` vers `_theme.css` + déclaration `@layer`, `application-name` en `[a-z0-9-]`, une seule occurrence du placeholder `%APPLICATION%` (le script inline `window.APPLICATION=%APPLICATION%;`), et les métas `df:*` adaptées à l'app. Lors de la migration, purger les métas mortes (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`).
+Remplacer `app.html` (Nuxt) ou `public/index.html` (Vue CLI) par un `index.html` à la racine, **en reprenant le squelette canonique de la section « index.html — document complet » du SKILL.md** — ne pas le réinventer : `<!DOCTYPE html>` en première ligne, pas de `lang` sur `<html>` (posé par le proxy), `<div id="app">` (car `<v-main>` porte déjà le repère `<main>`), `<link>` vers `_theme.css` + déclaration `@layer`, `<script>` vers `_public.js`, `application-name` en `[a-z0-9-]`, une seule occurrence du placeholder `%APPLICATION%` (le script inline `window.APPLICATION=%APPLICATION%;`), et les métas `df:*` adaptées à l'app. Lors de la migration, purger les métas mortes (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`).
 
 ### État global (Vuex → Composables)
 
@@ -236,7 +236,7 @@ Les apps legacy portent souvent des mots-clés vjsf 2 (`x-display`, `x-fromUrl`,
 5. [ ] Remplacer axios par useFetch
 6. [ ] Implémenter createConfig
 7. [ ] Implémenter reactiveSearchParams
-8. [ ] Implémenter le thème dynamique (session) : `vuetifySessionOptions`, `<link>` vers `_theme.css`, déclaration `@layer`, et les quatre thèmes `default` / `dark` / `hc` / `hc-dark`
+8. [ ] Implémenter le thème dynamique (session) : `vuetifySessionOptions`, `<link>` vers `_theme.css`, déclaration `@layer`, `<script>` vers `_public.js` avec `siteInfo: !window.__PUBLIC_SITE_INFO` en repli, et les quatre thèmes `default` / `dark` / `hc` / `hc-dark`
 9. [ ] Tester le mode draft (postMessage)
 10. [ ] Tester les filtres et la réactivité URL
 11. [ ] `npm run build` + `npm run type-check` + `npm run lint`

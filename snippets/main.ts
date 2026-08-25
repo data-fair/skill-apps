@@ -24,8 +24,13 @@ import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
 ;(window as any).vIframeOptions = { reactiveParams: reactiveSearchParams }
 
 async function init () {
-  // siteInfo: true est obligatoire — vuetifySessionOptions lève sans session.site.value
-  const session = await createSession({ directoryUrl: '/simple-directory', siteInfo: true })
+  // vuetifySessionOptions lève sans session.site.value : le <script> _public.js
+  // d'index.html pose window.__PUBLIC_SITE_INFO, lu sans fetch ; siteInfo déclenche
+  // refreshSiteInfo, déprécié, et ne reste qu'en repli si le script n'a pas été servi
+  const session = await createSession({
+    directoryUrl: '/simple-directory',
+    siteInfo: !window.__PUBLIC_SITE_INFO
+  })
 
   // createI18n APRÈS la session, avec la locale définitive.
   // - useI18n() ne s'exécute que dans un setup(), donc aucune raison de créer
