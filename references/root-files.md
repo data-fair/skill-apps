@@ -101,6 +101,26 @@ Le fichier est généré **une fois**, au premier `npm run dev`, puis laissé te
 
 `APP_PATH` n'est pas un port mais suit le précédent de `DEV_HOST` dans le `.env` généré de `data-fair` : `df-dev-server` en dérive son `app.url` (`http://localhost:$APP_PORT$APP_PATH`), ce qui rend impossible la désynchronisation entre le port de Vite et celui de l'URL proxifiée. `APP_URL` reste prioritaire pour une app qui n'est pas servie sur `localhost` (les apps nuxt, `carto-stats`).
 
+### Migrer une application existante
+
+27 des 37 applications du parc sont encore sur la convention en dur (3000 / 5888) et passeront par là une à une. Dans l'ordre :
+
+1. `npm i -D @data-fair/dev-server@^2.5.0 dotenv-cli`
+2. **`package.json`** : `"dev": "df-dev-env && dotenv -- zellij --layout .zellij.kdl"` ; `"dev-server": "df-dev-server"` — **retirer le préfixe `APP_URL=http://localhost:3000/app/`** ; `"dev-app": "vite"`, nu comme `dev-server` ; `"test"` et `"test-e2e"` gagnent le préfixe `df-dev-env && dotenv --` ; `"test-unit"` ne change pas, il ne lance aucun `webServer` et n'a donc besoin d'aucun port.
+3. **`vite.config`** : passer à la forme factory `loadEnv`, avec `hmr.port` aligné sur `server.port` — code exact au § « vite.config.ts » ci-dessus, ne pas le reproduire ici.
+4. **`playwright.config.ts`** : lire `E2E_PORT`, passer `APP_PORT` par `webServer.env` — code exact au § « Tests — Playwright » ci-dessus.
+5. Supprimer `tests/helpers/port.ts` et la ligne `tests/.test-port` du `.gitignore` : le port vient désormais du `.env`.
+6. **`.gitignore`** : ajouter `.env` et `.dev-config.json`, **puis** `git rm --cached .dev-config.json` — une ligne de `.gitignore` n'a aucun effet sur un fichier déjà suivi. 27 applications du parc suivent `.dev-config.json` aujourd'hui, dont 8 qui l'ont pourtant déjà dans leur `.gitignore`.
+7. **`.zellij.kdl`** : ajouter le bandeau d'URL en dernière ligne (§ « .zellij.kdl » ci-dessous).
+
+**Trois pièges** :
+
+> **⚠️ Une application qui a déjà un `.env`.** `df-dev-env` est idempotent par construction : s'il trouve un `.env`, il ne fait rien — ni lecture ni validation de son contenu. Une application qui porte déjà un `.env` pour une tout autre raison ne reçoit donc **aucun port**, silencieusement. Cas réel du parc : `carto-explore`, dont le `.env` porte `PUBLIC_URL=/app/`. Correction : ajouter les trois lignes de port à la main, ou lancer `df-dev-env --force` puis recoller le contenu préexistant par-dessus.
+
+> **⚠️ Une application servie à la racine plutôt que sous `/app/`.** Depuis dev-server 2.5.0, `APP_PATH` **vaut `/app/` par défaut** (il valait la chaîne vide avant) — un défaut utile puisque 27 des 37 applications sont des apps Vite servies sous `/app/`, et c'est ce qui fait fonctionner un clone neuf avant même qu'on ait lancé `df-dev-env`. Une application servie à la racine doit donc déclarer `APP_PATH=` explicitement — chaîne vide, non nullish, donc bien conservée. C'est une **rupture volontaire**, posée à la montée de version, qui touche les quatre applications appelant `df-dev-server` sans `APP_URL` : `app-minimal`, `app-chord-diagram`, et les deux apps nuxt `admin-divs-catchment` et `data-fair-geo-shapes`. Une application qui garde son propre `APP_URL` n'est pas concernée — `APP_URL` prime toujours.
+
+> **⚠️ Retirer le préfixe `APP_URL=…/app/` du script `dev-server` n'est sûr qu'une fois le `.env` en place.** C'est le défaut `/app/` ci-dessus qui rend l'opération sûre sur un clone neuf ; sans lui le proxy viserait silencieusement la racine de Vite pendant que Vite sert sous `/app/`, et l'application ne chargerait tout simplement pas, sans aucune erreur.
+
 ## .zellij.kdl
 
 Trois panes : un shell libre, `dev-app` (Vite) et `dev-server` (`df-dev-server`). Le `nvm use` de chaque pane aligne la version de Node — d'où la dépendance stricte au `.nvmrc` ci-dessus. 24 apps du parc ont ce fichier, 22 au motif exact (exceptions : `app-humidex` et `carto-explore` sans `nvm use`, `app-timelines` sur un vieux layout). Les services ont un layout plus riche (panes `ui`/`api`/`worker`/`deps`) qui ne s'applique pas aux apps, mais leur **bandeau d'URL en dernière ligne**, lui, est repris : depuis que le port est généré, il n'est plus mémorisable. Il exige le `dotenv --` du script `dev` (cf. « Ports de développement »).
