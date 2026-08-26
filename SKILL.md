@@ -34,14 +34,14 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
 - `@data-fair/lib-vue` **≥ 1.15** (peer de lib-vuetify 2.x) / `@data-fair/lib-utils`
 
 > Tout ce que ce skill décrit du thème suppose ces versions : les cascade layers `vuetify-*` sont propres à Vuetify 4, le reset CSS de `global.scss` est arrivé en lib-vuetify 2.0.3, et la résolution des quatre thèmes (`default`, `dark`, `hc`, `hc-dark`) en lib-vue 1.14. Sur une reprise, vérifier ces versions avant d'appliquer les conseils de la section thème.
-- Dev server : `df-dev-server` + Zellij layout `.zellij.kdl`
+- Dev server : `df-dev-server` + Zellij layout `.zellij.kdl`, ports générés dans un `.env` par `df-dev-env`
 
 ## Scripts obligatoires dans package.json
 
 ```json
 {
-  "dev": "zellij --layout .zellij.kdl",
-  "dev-server": "APP_URL=http://localhost:3000/app/ df-dev-server",
+  "dev": "df-dev-env && dotenv -- zellij --layout .zellij.kdl",
+  "dev-server": "df-dev-server",
   "dev-app": "vite",
   "build": "vite build",
   "lint": "eslint .",
@@ -49,14 +49,16 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
   "prepare": "husky || true",
   "type-check": "vue-tsc --noEmit",
   "build-types": "df-build-types && cp src/config/.type/resolved-schema.json public/config-schema.json",
-  "test": "playwright test --max-failures=1",
+  "test": "df-dev-env && dotenv -- playwright test --max-failures=1",
   "test-unit": "playwright test --project unit",
-  "test-e2e": "playwright test --project e2e",
+  "test-e2e": "df-dev-env && dotenv -- playwright test --project e2e",
   "quality": "npm run lint && npm run build-types && npm run type-check && npm run build && npm test && npm audit --omit=dev --audit-level=critical"
 }
 ```
 
 > Scripts de test **au tiret** (`test-e2e`), comme les services — pas la variante legacy `test:e2e` encore présente dans la plupart des apps.
+
+> **Aucun port en dur dans les scripts.** `df-dev-env` (bin de `@data-fair/dev-server` ≥ 2.5.0) génère au premier lancement un `.env` git-ignoré portant `APP_PORT` / `DEV_SERVER_PORT` / `E2E_PORT`, ce qui permet de faire tourner plusieurs applications en parallèle. `vite` le lit par `loadEnv`, `df-dev-server` par `dotenv`, les scripts npm par `dotenv --`. Détail complet et pièges dans `references/root-files.md` § « Ports de développement ».
 
 ## Contrat DataFair
 
@@ -98,6 +100,12 @@ window.APPLICATION = {
 `df-dev-server` lit `.dev-config.json` à la racine du projet et injecte son contenu dans `window.APPLICATION.configuration` via `%APPLICATION%`. C'est l'équivalent dev de la config injectée par DataFair en production.
 
 > **Règle** : quand l'utilisateur dit « la configuration », lire `.dev-config.json`. Le fichier est aussi disponible pour tout contexte de configuration — le lire si on a besoin de plus de contexte, même sans demande explicite.
+
+> **État local, jamais commité.** Le fichier n'est pas obligatoire : `df-dev-server` démarre sans (la configuration injectée vaut alors `{}`) et le crée à la première sauvegarde depuis son UI. Il appartient au développeur, pas au dépôt — c'est déjà ainsi que le dépôt `dev-server` lui-même le traite. En reprise, `git rm --cached .dev-config.json` : la ligne de `.gitignore` seule n'a aucun effet sur un fichier déjà suivi.
+
+> **Amorçage d'un clone neuf** : ne pas chercher à écrire une configuration à la main. L'UI du dev-server sait **copier une configuration d'une application réelle** hébergée sur le data-fair distant (elle liste les applications de même version mineure). C'est le chemin prévu, et il ne demande rien de commité.
+
+> **Portabilité** : depuis `@data-fair/dev-server` 2.5.0, la configuration est stockée avec ses URLs distantes (`https://koumoul.com/...`) et les origines sont réécrites vers le proxy local **à l'injection**, plus au stockage. Un `.dev-config.json` ne contient donc aucun `localhost` ni aucun port : il s'échange entre développeurs et survit à un `df-dev-env --force`. Si on en croise un qui porte encore `http://localhost:5888/...`, il fonctionne — une réécriture de transition le rattrape sur les chemins proxifiés — mais il date d'avant 2.5.0.
 
 ### AccessKey
 
@@ -328,8 +336,9 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 
 ```
 my-visu/
+├── .env                         # Ports de dev générés par df-dev-env — git-ignoré
 ├── .nvmrc                       # Version Node majeure seule (ex: "24") — requis par .zellij.kdl
-├── .zellij.kdl                  # Layout dev (vite + df-dev-server)
+├── .zellij.kdl                  # Layout dev (vite + df-dev-server + bandeau URL)
 ├── index.html                   # %APPLICATION% + meta tags df:*
 ├── vite.config.ts
 ├── package.json
@@ -359,8 +368,9 @@ Ces fichiers ne se devinent pas et se recopient mal : reprendre celui d'une appl
 
 > **Statut de ce boilerplate** : c'est la **cible**, définie sur `bar-chart-race` en s'inspirant des services (`data-fair`, `catalogs`, `processings`) — pas l'état du parc. La plupart des apps existantes en divergent (pas de husky, `lint` avec `--fix`, un seul projet Playwright, tsconfig sans `tests/**`). Sur une **reprise**, migrer vers cette cible plutôt que d'imiter l'app voisine ; l'état réel du parc est noté point par point dans `references/root-files.md`.
 
-Contenus intégraux à copier : **`references/root-files.md`** (package.json et peerDependencies, husky/commitlint, `.nvmrc`, `.zellij.kdl`, `eslint.config.js`, `tsconfig.json`, `vite.config.ts`, `playwright.config.ts`, `.gitignore`). Les pièges à connaître même sans générer de fichier :
+Contenus intégraux à copier : **`references/root-files.md`** (package.json et peerDependencies, husky/commitlint, `.nvmrc`, **ports de développement / `.env`**, `.zellij.kdl`, `eslint.config.js`, `tsconfig.json`, `vite.config.ts`, `playwright.config.ts`, `.gitignore`). Les pièges à connaître même sans générer de fichier :
 
+- **Ports de développement dans un `.env` git-ignoré**, générés par `df-dev-env` : sans ça une seule application tourne à la fois. Deux oublis coûteux, tous deux silencieux — `hmr.port` non aligné sur `APP_PORT` (Vite garde un websocket sur 3000 et l'app tient deux ports), et le `dotenv --` manquant devant `zellij` (chaque pane est un process fils, les variables n'y arrivent pas).
 - **peerDependencies de `@data-fair/lib-vue` à déclarer explicitement** — `dayjs` est le piège courant : jamais importé directement, son absence ne se voit ni au `type-check` ni au build tant que npm l'a hissé depuis une dépendance transitive, puis casse ailleurs.
 - **`build-types` avant `type-check` et `build`** sur un clone neuf : `src/config/.type/` est git-ignoré et réexporté par `src/config/index.ts` — ordonner la CI en conséquence.
 - **`.nvmrc` obligatoire dès que `.zellij.kdl` existe** (version majeure seule, ex. `24`) : sans lui, chaque pane sort en `[ EXIT CODE: 127 ]` sans aucun message — l'oubli le plus facile en générant les fichiers racine d'un nouveau projet.
