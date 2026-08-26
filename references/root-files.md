@@ -83,7 +83,7 @@ E2E_PORT=24732
 APP_PATH=/app/
 ```
 
-Plage choisie sous le range éphémère du noyau (32768–60999, où un port peut déjà être tenu par une connexion sortante) et au-dessus du bloc `191xx` du docker compose de `data-fair`. Le générateur vérifie que les trois ports bindent avant d'écrire ; en cas de collision malgré tout, `df-dev-env --force` retire.
+Plage choisie sous le range éphémère du noyau (32768–60999, où un port peut déjà être tenu par une connexion sortante) et au-dessus du bloc `191xx` du docker compose de `data-fair`. Le générateur vérifie que les trois ports bindent avant d'écrire ; en cas de collision malgré tout, `df-dev-env --force` tire un nouveau triplet.
 
 Le fichier est généré **une fois**, au premier `npm run dev`, puis laissé tel quel : le port doit rester stable (favoris, onglets, `webServer` Playwright).
 

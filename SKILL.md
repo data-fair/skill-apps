@@ -1031,7 +1031,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 ## Checklist de livraison
 
 - [ ] `npm run build` passe
-- [ ] `server.warmup.clientFiles` déclaré dans `vite.config.ts`, et la suite e2e verte **serveur froid** (supprimer `tests/.test-port` ou changer de port entre deux exécutions) — verte serveur chaud ne prouve rien
+- [ ] `server.warmup.clientFiles` déclaré dans `vite.config.ts`, et la suite e2e verte **serveur froid** (`df-dev-env --force` tire un nouvel `E2E_PORT`, donc un serveur neuf ; ou tuer le serveur entre deux exécutions) — verte serveur chaud ne prouve rien
 - [ ] `npm run type-check` passe (TS strict)
 - [ ] `npm run lint` passe
 - [ ] `public/config-schema.json` est généré et à jour
