@@ -28,7 +28,7 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
 **Stack standard** (obligatoire pour les nouveaux projets) :
 - Vue 3.5+, Composition API, `<script setup lang="ts">`
 - Vuetify 4 avec `vite-plugin-vuetify`
-- Vite 8
+- Vite 8 (bundler **rolldown**, plus Rollup)
 - TypeScript strict
 - `@data-fair/lib-vuetify` **2.x** — c'est la ligne Vuetify 4 (`peerDependencies: { vuetify: "4" }`) ; la 1.x est la ligne Vuetify 3 et n'est pas compatible
 - `@data-fair/lib-vue` **≥ 1.15** (peer de lib-vuetify 2.x) / `@data-fair/lib-utils`
@@ -189,13 +189,13 @@ nom du dépôt  =  package.json name (hors scope)  =  meta application-name
      app-charts        @data-fair/app-charts             app-charts
 ```
 
-Format `[a-z0-9-]` : sans accent, sans espace, sans majuscule.
+Format `[a-z0-9-]` : sans accent, sans espace, sans majuscule — **convention pour les nouvelles briques, pas une validation**. Le schéma `BaseApp` de data-fair déclare `applicationName: { type: 'string' }`, sans `pattern` (`api/types/base-app/schema.js`) : une valeur hors format est acceptée, importée et fonctionne. Le parc installé le montre — sur 28 applications du dossier, 21 portent un libellé humain (`Diagramme de Sankey`, `Application Calendrier`, `Bar chart race`) et 7 seulement un slug. Ne pas lire un `application-name` non conforme comme un bug à corriger : c'est le cas majoritaire, et la seule propriété qui compte réellement est la **stabilité** de la valeur d'une version à l'autre.
 
 C'est la **clé d'identité de la brique entre ses versions**. Elle permet à DataFair de reconnaître `app-charts@1.2` et `app-charts@1.3` comme un même modèle et de proposer la montée de version — filtre `?applicationName=`, qui matche `applicationName` ou `meta.application-name` (`base-applications/router.ts`). Champ requis du schéma `BaseApp`, et seule porte d'entrée à l'import si l'application n'expose pas de `config-schema.json`.
 
 C'est aussi ce qui rend un renommage possible. Le nom du dépôt est invisible pour DataFair, qui ne voit qu'une URL de brique : le renommer n'a aucun effet. Renommer le paquet npm change l'URL, donc l'identifiant de la brique (`id: slug(app.url)`) — DataFair enregistre une **nouvelle** brique, l'ancienne subsiste et les applications existantes continuent de fonctionner. `application-name` inchangée relie les deux.
 
-> **Règle de modification** : à la création, les trois noms alignés sont une contrainte. Sur une application existante, **n'en modifier aucun des trois** — c'est une décision humaine, jamais un effet de bord d'une migration. Réaligner une brique déjà enregistrée exige de patcher aussi l'`applicationName` **stocké** de toutes ses versions, sinon la correspondance des versions est perdue.
+> **Règle de modification** : à la création, les trois noms alignés sont une contrainte. Sur une application existante, **n'en modifier aucun des trois** — c'est une décision humaine, jamais un effet de bord d'une migration. Réaligner une brique déjà enregistrée exige de patcher aussi l'`applicationName` **stocké** de toutes ses versions, sinon la correspondance des versions est perdue. Cela vaut **y compris quand la valeur n'est pas au format** ci-dessus : une réécriture complète de l'application, même avec rupture de configuration assumée, ne rebaptise pas la brique — sinon les visualisations déjà configurées perdent le lien avec leurs versions. Le seul cas où la valeur est encore libre est celui d'une brique **jamais importée dans aucune instance data-fair**.
 
 #### Métas à ne pas déclarer
 
@@ -375,10 +375,35 @@ Contenus intégraux à copier : **`references/root-files.md`** (package.json et 
 - **`build-types` avant `type-check` et `build`** sur un clone neuf : `src/config/.type/` est git-ignoré et réexporté par `src/config/index.ts` — ordonner la CI en conséquence.
 - **`.nvmrc` obligatoire dès que `.zellij.kdl` existe** (version majeure seule, ex. `24`) : sans lui, chaque pane sort en `[ EXIT CODE: 127 ]` sans aucun message — l'oubli le plus facile en générant les fichiers racine d'un nouveau projet.
 - **eslint : `neostandard({ ts: true })` + vue + vuetify + `@data-fair/lib-utils/eslint/recommended.js`**, avec le contournement du double enregistrement du plugin `vue` — obligatoire dès **ESLint 9.39+** (aujourd'hui seuls `bar-chart-race` et `data-fair/ui` y sont ; les autres services, en 9.35, n'en ont pas encore besoin) — config complète dans `references/root-files.md`.
+- **Deux plafonds de version que « tout mettre à jour » ne doit pas franchir**, à revérifier avant chaque montée plutôt qu'à recopier :
+  - **ESLint reste en 9.** `neostandard` — 0.13.0, la dernière — déclare `peerDependencies: { eslint: "^9.0.0" }`. ESLint 10 est publié, mais rien dans la chaîne ne le suit encore.
+  - **TypeScript reste en 6.** `typescript-eslint` 8.68 déclare `typescript: ">=4.8.4 <6.1.0"`. TypeScript 7 est publié ; il sortirait de la plage supportée par le parseur.
+
+  Contrôle : `npm view neostandard peerDependencies` et `npm view typescript-eslint peerDependencies`.
+- **Déclarer `@typescript-eslint/parser`, pas le méta-paquet `typescript-eslint`.** La config nomme le parseur par sa chaîne (`parser: '@typescript-eslint/parser'`) ; le méta-paquet ne servait qu'à le hisser en transitif. Aucune config du parc ne l'importe.
+- **`@data-fair/lib-common-types` va en `devDependencies`** : il n'est consommé qu'en `import type`, donc effacé au build. En `dependencies` il gonfle l'installation de production et la surface de `npm audit --omit=dev` pour rien.
 - **`vueI18n({})` sans option `include`** dans `vite.config.ts` : un `include` hérité de l'ancien plugin fait parser des SFC entiers comme du JSON et le build échoue sur `SyntaxError: Unexpected token '<'` en pointant `ui-notif.vue`.
 - **Police du site cassée en dev seulement** : le dev server de Vite réécrit les URLs root-relative d'`index.html` en `base + url` → le `<link>` vers `/simple-directory/api/sites/_theme.css` part en `/app/simple-directory/…`, servi en `200 text/html` (fallback SPA de Vite), rendu en serif par défaut. Corrigé dans `@data-fair/dev-server` ≥ 2.3.4 (redirection vers son proxy `/simple-directory`) : **mettre à jour la dépendance**, pas de correctif dans l'app.
 - **Husky + commitlint comme les services** : `pre-commit` → `lint` (sans `--fix` — la plupart des apps legacy ont encore `lint: eslint . --fix`, à corriger en reprise), `commit-msg` → commitlint, `pre-push` → `quality` ; config dans un fichier `commitlint.config.ts`, comme tout l'écosystème. Ne pas rejouer les e2e en CI.
+- **`server.warmup.clientFiles` dans `vite.config.ts`** : `warmup: { clientFiles: ['./src/main.ts', './src/**/*.vue'] }`. Sans lui, le serveur ne transforme le graphe de modules qu'à la **première requête**, et la suite e2e court contre ce démarrage à froid. Les symptômes ne ressemblent pas à leur cause : `Execution context was destroyed, most likely because of a navigation` sur le premier `page.evaluate`, ou `Failed to fetch dynamically imported module` dès qu'un composant passe par `defineAsyncComponent`. Le réflexe — un projet Playwright « warmup » monté en `dependencies` d'`e2e` — traite le symptôme et **coûte une page de plus à chaque exécution** ; `server.warmup` traite la cause et sert aussi le développement quotidien. Vérifié sur les sept applications : trois démarrages à froid consécutifs, verts, sans projet warmup.
 - **Tests Playwright dans `tests/`**, `.spec.ts` (jamais `.test.ts`), projets `unit`/`e2e` ; `webServer` conditionné au projet e2e ; injecter `window.APPLICATION` via `page.addInitScript` ; toute assertion négative exige son contrôle positif en regard.
+
+#### Les e2e tournent contre le serveur de développement, pas contre `dist/`
+
+C'est le choix du parc, et il n'est pas gratuit. Ce qu'il achète : pas de build avant chaque exécution, les traces pointent le fichier source, et `page.route` intercepte les mêmes URL qu'en production.
+
+Ce qu'il ne couvre pas, c'est exactement ce que le bundler change :
+
+| Non testé en dev | Pourquoi ça peut diverger |
+|---|---|
+| Ordre des couches CSS | Il dépend du chunk qui se charge en premier, donc du code splitting — c'est le motif même de la déclaration `@layer` d'`index.html` |
+| Découpage en chunks | `defineAsyncComponent` ne produit un chunk séparé qu'au build |
+| Minification, tree-shaking | Un `import` conservé en dev peut disparaître au build |
+| Réécriture des URLs d'`index.html` | Vite réécrit `/favicon.ico` en `base + favicon.ico` au build, pas en dev |
+
+Aucune de ces divergences n'est théorique : la panne de police décrite plus haut est précisément une divergence dev/build. Un jeu de tests réduit contre `vite preview` (qui sert `dist/`) est le complément naturel — il supprime au passage toute course au démarrage à froid, `preview` ne servant que des fichiers statiques. Aucune application du parc ne le fait aujourd'hui.
+
+> **Vite 8 embarque rolldown** (`rolldown ~1.2.4` en dépendance de `vite`), plus Rollup. Conséquence visible au build : `<script src="/simple-directory/api/sites/_public.js"> in "/index.html" can't be bundled without type="module" attribute`. **Cet avertissement est normal et le script est bien conservé dans `dist/index.html`** — vérifié sur les sept applications. Ne pas le « corriger » en ajoutant `type="module"` : le script doit rester classique pour être exécuté avant le module `main.ts`, qui est différé, sans quoi `window.__PUBLIC_SITE_INFO` n'est pas posé quand `createSession` le teste.
 - **Pas de `.editorconfig`** — aucun dépôt maison n'en a ; le supprimer sur une reprise, une fois `neostandard` en place.
 
 ## Schéma de configuration (VJSF)
@@ -678,8 +703,39 @@ const i18n = createI18n({
 })
 ```
 
-Un composant qui porte son propre bloc `<i18n>` est en portée locale et **résout quand même** les
-`numberFormats` globaux par la chaîne de repli — vérifié sur sankey et sunburst.
+#### ⚠️ Un bloc `<i18n>` local casse `n(v, 'percent')` — prendre `n` en portée globale
+
+Un composant qui porte son propre bloc `<i18n>` passe en **portée locale**. `n(v, 'percentPrecise')`
+y cherche alors le format dans les `numberFormats` **du bloc local**, qui n'en déclare aucun. La
+valeur finit correcte, par la chaîne de repli, mais chaque appel émet quatre avertissements :
+
+```
+[intlify] Not found 'percentPrecise' key in 'fr' locale messages.
+[intlify] Fall back to number format 'percentPrecise' key with 'en' locale.
+[intlify] Not found 'percentPrecise' key in 'en' locale messages.
+[intlify] Fall back to number format 'percentPrecise' with root locale.
+```
+
+Le rendu étant juste, rien n'échoue : les tests passent, la revue passe, et la console de dev est
+noyée — un tooltip qui suit la souris en produit des centaines. C'est le pendant exact du piège
+`toLocaleString()` : silencieux parce que la sortie est bonne.
+
+**Correctif** — sortir `n` de la portée locale, en laissant `t` dessus :
+
+```ts
+const { t } = useI18n()                        // messages du bloc <i18n> local
+const { n } = useI18n({ useScope: 'global' })  // numberFormats de createI18n
+```
+
+Deux appels à `useI18n()` dans le même `setup()` sont légitimes. Vérifié sur `data-fair-sunburst` et
+`data-fair-sankey` (35 et 27 tests e2e verts, y compris celui qui asserte un rendu français sous
+`navigator.language = en-US`, et plus un seul `[intlify]` dans la console). Ne **pas** tenter de
+déclarer les `numberFormats` dans le bloc `<i18n>` du SFC : `@intlify/unplugin-vue-i18n` compile son
+contenu en `messages`, pas en formats.
+
+**Test de non-régression** : asserter zéro `console.warn` `[intlify]` pendant le scénario qui affiche
+un pourcentage. C'est la seule façon de distinguer « la portée est correcte » de « le repli sauve les
+meubles ».
 
 Points de détail qui comptent :
 
@@ -975,6 +1031,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 ## Checklist de livraison
 
 - [ ] `npm run build` passe
+- [ ] `server.warmup.clientFiles` déclaré dans `vite.config.ts`, et la suite e2e verte **serveur froid** (supprimer `tests/.test-port` ou changer de port entre deux exécutions) — verte serveur chaud ne prouve rien
 - [ ] `npm run type-check` passe (TS strict)
 - [ ] `npm run lint` passe
 - [ ] `public/config-schema.json` est généré et à jour
@@ -982,6 +1039,8 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] tous les libellés visibles commencent par une majuscule — `title`, `description`, options d'`enum` / `oneOf`, boutons, empty states, messages d'erreur, **y compris les chaînes en dur dans les templates**
 - [ ] `public/thumbnail.png` est présent
 - [ ] `index.html` : `<!DOCTYPE html>` obligatoire, pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>` lisible, une seule `<meta name="description">`, `<div id="app">` (si `<v-main>`) ou `<main id="app">`, `<link>` vers `_theme.css` et déclaration `@layer`
+- [ ] `<script src="/simple-directory/api/sites/_public.js">` présent **et** `main.ts` en `siteInfo: !window.__PUBLIC_SITE_INFO` — les deux, jamais l'un sans l'autre. Contrôle : lancer les e2e et grepper `refreshSiteInfo is deprecated` dans la sortie ; un seul hit signifie que la session paie encore le fetch bloquant. Attention au faux négatif inverse : un mock qui répond du JSON à tout `**/simple-directory/**` sert du JSON pour `_public.js` aussi, le global reste vide et l'app repasse en silence par le chemin déprécié alors que le code est bon
+- [ ] aucun avertissement `[intlify]` en console pendant les e2e (cf. « Un bloc `<i18n>` local casse `n(v, 'percent')` »)
 - [ ] `application-name` = nom du dépôt = nom du paquet, en `[a-z0-9-]`
 - [ ] aucune méta morte (`keywords`, `thumbnail`, `vocabulary-*`, `version`, `title`, `x-capture`, `{VERSION}`)
 - [ ] accessibilité : checklist de `references/accessibility-rgaa.md` passée
