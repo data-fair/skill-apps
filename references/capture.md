@@ -86,8 +86,8 @@ else { /* image fixe : afficher l'état le plus parlant */ }
 > recopier ce détail de l'exemple.
 >
 > Le type correct est `triggerCapture?: (animationSupported?: boolean) => Promise<boolean>`.
-> Seul `bar-chart-race` le déclare ainsi ; `data-fair-word-cloud` déclare `Promise<void>`,
-> `app-dashboards`, `data-fair-metrics` et `app-form` déclarent `void` : à corriger au passage.
+> Seul `bar-chart-race` le déclare ainsi ; `Promise<void>` et `void` sont les deux erreurs
+> rencontrées ailleurs dans le parc — à corriger dès qu'on touche au fichier.
 
 ---
 

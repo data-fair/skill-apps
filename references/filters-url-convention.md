@@ -245,15 +245,16 @@ avec `_c_` (concept) ou `_d_<datasetId>_` (champ simple), jamais en clé nue.
 
 ## Écarts connus / à corriger
 
-- **app-dashboards** : l'URL propre du dashboard écrit `_d_<rootDatasetId>_<field>_<op>`
-  pour **tous** les filtres, y compris ceux à concept (seul le broadcast vers les
-  enfants ajoute le miroir `_c_`). Une app externe ne peut pas recycler ces
-  filtres sans connaître le schéma du dataset racine. Correction prévue :
-  doubler `_c_` dans l'URL propre, en gardant la lecture des anciennes clés `_d_`.
-- **lib-vue** : les builders de clés (`datasetFilterKey` / `conceptFilterKey`)
-  vivent dans app-dashboards (`src/utils/dataset-filter.ts`) et ne sont pas
-  centralisés — mutualisation possible pour que toutes les apps réutilisent la
-  même implémentation.
-- **Documentation** : DASHBOARDS-AGENTS.md §2.3.1 affirme que le format
-  dataset-scopé « est attendu par l'API REST de l'embed dataset » alors que le
-  préfixe est en fait stripé avant l'appel — formulation à corriger.
+- **URL propre qui ne double pas les filtres à concept** : si l'URL propre d'une
+  application écrit `_d_<rootDatasetId>_<field>_<op>` pour **tous** les filtres, y
+  compris ceux à concept, et ne double le miroir `_c_` que dans le broadcast vers
+  ses enfants, une app externe ne peut pas recycler ces filtres sans connaître le
+  schéma du dataset racine. Correction : doubler `_c_` dans l'URL propre
+  elle-même, en gardant la lecture des anciennes clés `_d_`.
+- **Builders de clés non centralisés** : `datasetFilterKey` / `conceptFilterKey`
+  sont parfois réimplémentés localement (`src/utils/dataset-filter.ts`) plutôt que
+  fournis par `lib-vue` — mutualisation possible pour que toutes les apps
+  réutilisent la même implémentation.
+- **Documentation à ne pas reproduire** : ne pas décrire le format dataset-scopé
+  comme « attendu par l'API REST » de l'embed dataset — le préfixe est en fait
+  stripé avant l'appel (cf. ci-dessus, § Filtres de concepts).
