@@ -176,6 +176,60 @@ Lorsqu'un texte ou une région dynamique (`aria-live`) doit être accessible aux
 - `.d-sr-only` : masque visuellement l'élément tout en le conservant dans l'arbre d'accessibilité (position absolute, clip 0, dimension 1px).
 - `.d-sr-only-focusable` : masque l'élément mais le rend visible dès qu'il reçoit le focus clavier (idéal pour les liens d'évitement).
 
+> **⚠️ `.d-sr-only` ne fonctionne pas posée sur un `<table>`.** La classe masque en réduisant l'élément à 1 px et en le rognant (`clip`). Or un `display: table` traite `height` comme un **minimum** : le 1 px est ignoré et la table garde sa hauteur de contenu. `clip` masque alors la **peinture**, pas la **mise en page** — la table reste dans le flux et rallonge la zone scrollable du document. Mesuré sur `data-fair-sankey` : `getComputedStyle(table).height` à `1118px` pour une classe qui en demande 1, un document à 2054 px pour une fenêtre de 937, et une barre de défilement de 15 px sur une visualisation censée tenir dans son cadre.
+>
+> Le tableau de données équivalent, précisément, est une `<table>`. **Poser `.d-sr-only` sur un `<div>` enveloppant**, jamais sur la table elle-même : un `display: block` respecte le 1 px et l'`overflow: hidden` du wrapper contient la table.
+>
+> ```html
+> <!-- la table reste lisible par les technologies d'assistance, sans peser sur le layout -->
+> <div class="d-sr-only">
+>   <table :id="tableId"> … </table>
+> </div>
+> ```
+>
+> Le symptôme trompeur est un **scroll parasite** dont rien dans la visualisation n'explique la hauteur : `.v-main` et le SVG mesurent tous la hauteur de la fenêtre, seul `document.documentElement.scrollHeight` déborde. Le réflexe — un `html { overflow-y: auto !important }` dans `App.vue` — ne traite pas la cause : il rend le débordement scrollable au lieu de le supprimer. Contrôle de non-régression : `document.documentElement.scrollHeight - clientHeight === 0`, avec en regard le contrôle positif que la table compte toujours ses lignes.
+
+### Un `<title>` dans un `<svg>` est aussi une infobulle native
+
+`<title>` est la façon canonique de nommer un SVG dans l'arbre d'accessibilité, et c'est ce que suggère la ligne « `<title>` par élément » du tableau des rendus graphiques. Ce que la spec ajoute, et qu'on oublie : les navigateurs rendent aussi ce `<title>` comme une **infobulle native au survol**, exactement comme l'attribut `title` d'un élément HTML.
+
+La conséquence dépend entièrement d'**où** il est posé :
+
+| Emplacement | Effet |
+|---|---|
+| Sur la racine `<svg>` | l'infobulle se déclenche sur **toute** la surface de la visualisation et suit le pointeur — elle recouvre l'infobulle applicative, apparaît sur chaque déplacement de souris, et n'apporte rien puisqu'elle répète le nom du graphique |
+| Sur un élément interne (une barre, un nœud, un secteur) | **utile** : c'est ce qui redonne un libellé tronqué ou masqué par manque de place, au survol de l'élément concerné |
+
+**Règle** : nommer la racine du SVG avec **`aria-label`**, et réserver `<title>` aux éléments internes dont le libellé visible est tronqué. Les deux mécanismes nomment aussi bien l'un que l'autre pour un lecteur d'écran ; seul `<title>` a l'effet visuel.
+
+```html
+<!-- le nom accessible du graphique : aria-label, pas un <title> interne -->
+<svg :aria-label="t('sankeyDiagram')" :aria-describedby="tableId">
+  <g v-for="node in nodes">
+    <!-- utile ici : le libellé du nœud est tronqué pour tenir dans la marge -->
+    <title>{{ node.fullLabel }}</title>
+    <rect … />
+  </g>
+</svg>
+```
+
+Constaté deux fois sur `data-fair-sankey`, corrigé puis réintroduit par une réécriture — d'où le test de non-régression : `svg > title` doit compter **0**, la racine doit porter un `aria-label` non vide, et les `svg g > title` internes restent attendus.
+
+### Contour de focus sur un tracé SVG : l'`outline` suit la boîte englobante
+
+`outline` sur un élément SVG est dessiné autour de sa **boîte englobante**, pas autour de sa forme. Sur une icône carrée, la différence ne se voit pas. Sur un tracé courbe qui traverse la visualisation — un lien de sankey, un arc de diagramme de cordes — la boîte englobante est un rectangle qui peut dépasser le graphique entier : mesuré sur `data-fair-sankey`, **1691 × 889 px de contour pour un SVG de 1000 × 600, démarrant à x = −345**, donc hors champ.
+
+Le focus clavier reste obligatoire (7.1, 10.13). Le dessiner comme une **copie élargie du tracé**, peinte en dernier pour que rien ne la recouvre :
+
+```html
+<template v-if="focusedLink">
+  <path :d="focusedLink.path" :stroke-width="(focusedLink.width ?? 0) + 6" stroke="rgb(var(--v-theme-surface))" fill="none" />
+  <path :d="focusedLink.path" :stroke-width="(focusedLink.width ?? 0) + 2" stroke="currentColor" fill="none" />
+</template>
+```
+
+Neutraliser l'`outline` sur **`:focus`** et non `:focus-visible` : Chrome peint aussi le sien sur un simple clic souris, qui ne matche jamais `:focus-visible` sur ces tracés.
+
 ### Cartes maplibre : partiellement accessibles d'origine
 
 maplibre pose `role="region"`, `aria-label="Map"` et `tabindex="0"` sur son canvas. Deux conséquences :
@@ -231,3 +285,6 @@ Ce que `axe-core` ne voit pas et qui doit être testé à la main : tout ce qui 
 - [ ] palettes par défaut du schéma de config conformes
 - [ ] champs de saisie étiquetés
 - [ ] `axe-core` exécuté dans l'iframe : zéro violation
+- [ ] nom accessible du SVG porté par `aria-label`, aucun `<title>` enfant direct de la racine
+- [ ] `.d-sr-only` posée sur un `<div>` enveloppant et jamais sur un `<table>` ; `scrollHeight === clientHeight` sur le document
+- [ ] contour de focus d'un tracé SVG dessiné comme une copie du tracé, pas par `outline`
