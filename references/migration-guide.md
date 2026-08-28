@@ -229,6 +229,8 @@ Les apps legacy portent souvent des mots-clés vjsf 2 (`x-display`, `x-fromUrl`,
 
 ## Checklist de migration
 
+> **⚠️ Ne jamais modifier le numéro de version** : conserver la valeur exacte du champ `"version"` du `package.json` existant. Ne pas la bumper vers 1.0.0 ou autre version sous prétexte qu'il s'agit d'une refonte majeure.
+
 1. [ ] Migrer le build (Vue CLI → Vite)
 2. [ ] Migrer Vuetify 2 → Vuetify 4
 3. [ ] Migrer les composants Vue 2 → Vue 3 (Composition API)
@@ -239,4 +241,5 @@ Les apps legacy portent souvent des mots-clés vjsf 2 (`x-display`, `x-fromUrl`,
 8. [ ] Implémenter le thème dynamique (session) : `vuetifySessionOptions`, `<link>` vers `_theme.css`, déclaration `@layer`, `<script>` vers `_public.js` avec `siteInfo: !window.__PUBLIC_SITE_INFO` en repli, et les quatre thèmes `default` / `dark` / `hc` / `hc-dark`
 9. [ ] Tester le mode draft (postMessage)
 10. [ ] Tester les filtres et la réactivité URL
-11. [ ] `npm run build` + `npm run type-check` + `npm run lint`
+11. [ ] Conserver la version d'origine dans `package.json` (aucun bump de version)
+12. [ ] `npm run build` + `npm run type-check` + `npm run lint`

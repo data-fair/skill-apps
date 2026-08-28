@@ -4,7 +4,9 @@ Ces fichiers ne se devinent pas et se recopient mal : reprendre celui d'une appl
 
 > **Statut** : ce boilerplate est la **cible**, définie sur `bar-chart-race` (le pilote) en s'inspirant des services `data-fair` / `catalogs` / `processings`. Ce n'est **pas** l'état du parc — l'écart réel est signalé section par section (« État du parc »). Sur un nouveau projet, appliquer la cible telle quelle ; sur une reprise, migrer vers la cible.
 
-## package.json — dépendances
+## package.json — dépendances et version
+
+> **⚠️ Champ `version` : ne jamais modifier ni bumper la version de l'application.** Les agents ne doivent absolument jamais, en aucun cas, modifier le numéro de version dans `package.json`. La gestion des versions (semver, releases, tags git) est strictement réservée aux mainteneurs humains et aux pipelines de publication. Lors d'une création, migration ou refonte, conserver la version existante sans y toucher.
 
 **Les peerDependencies de `@data-fair/lib-vue` doivent être déclarées explicitement.** La lib les déclare en `peerDependencies` et ne les installe donc pas :
 

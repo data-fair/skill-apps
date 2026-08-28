@@ -1070,6 +1070,7 @@ Points clés :
 
 ## Notes pour les agents
 
+- **Ne jamais modifier ni bumper le champ `version` de `package.json`** : la version de l'application est gérée exclusivement par les mainteneurs humains ou par les mécanismes de release/tagging du dépôt. Même lors d'une refonte majeure, migration de framework/stack (Vue 2 → Vue 3, Vuetify 4, Vite 8) ou ajout de fonctionnalités, les agents ne doivent **absolument jamais, en aucun cas** modifier ou incrémenter la version de l'application elle-même dans `package.json`.
 - **Ne jamais modifier** la logique `window.APPLICATION` ni renommer `public/config-schema.json`.
 - **Ne jamais modifier** le nom du dépôt, le `name` du `package.json` ni la méta `application-name` d'une application existante : décision humaine (cf. section `application-name`).
 - **Une correction dans `index.html` peut ne pas remonter dans le catalogue.** Les champs Titre, Description, Identifiant d'application, Version, Image et Catégorie de l'écran d'administration des briques font un `$set` direct en base, et la résolution est `baseApp.X || baseApp.meta.X` (`base-applications/operations.ts`) : la valeur saisie gagne toujours sur la méta et **survit aux ré-imports**. Pour revenir à la valeur du code, vider le champ côté administration.
