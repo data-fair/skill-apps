@@ -48,7 +48,7 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
   "lint-fix": "eslint --fix .",
   "prepare": "husky || true",
   "type-check": "vue-tsc --noEmit",
-  "build-types": "df-build-types && cp src/config/.type/resolved-schema.json public/config-schema.json",
+  "build-types": "df-build-types src/config",
   "test": "df-dev-env && dotenv -- playwright test --max-failures=1",
   "test-unit": "playwright test --project unit",
   "test-e2e": "df-dev-env && dotenv -- playwright test --project e2e",
@@ -123,7 +123,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 
 ### Fichiers publics obligatoires
 
-- `public/config-schema.json` : DataFair le fetch pour construire le formulaire de config. **Ne jamais renommer ni déplacer**.
+- `public/config-schema.json` : le schéma de configuration lui-même, écrit à la main — DataFair le fetch pour construire le formulaire de config. **Ne jamais renommer ni déplacer**.
 - `public/thumbnail.png` : Miniature pour la galerie d'applications. C'est la **présence du fichier à la racine** qui compte, et elle seule : `baseApp.image` est calculé en dur — `baseApp.url + 'thumbnail.png'` (`base-applications/operations.ts`). La meta `thumbnail` n'a aucun consommateur, ne pas la déclarer. `%PUBLIC_URL%` n'est substitué par aucun outil, ne pas l'utiliser non plus.
 
 ### index.html — document complet
@@ -343,7 +343,7 @@ my-visu/
 ├── vite.config.ts
 ├── package.json
 ├── public/
-│   ├── config-schema.json       # Généré depuis src/config/schema.json
+│   ├── config-schema.json       # Le schéma de configuration, écrit à la main
 │   └── thumbnail.png            # Miniature 400x300 min.
 ├── src/
 │   ├── main.ts                  # Bootstrap (voir snippets/main.ts)
@@ -356,7 +356,7 @@ my-visu/
 │   ├── components/
 │   │   └── ...                  # Composants métier
 │   ├── config/
-│   │   ├── schema.json          # JSON schema de configuration
+│   │   ├── schema.ts            # Ré-export d'une ligne de public/config-schema.json
 │   │   └── index.ts             # Re-export types générés
 │   └── styles/
 │       └── settings.scss        # Variables SCSS Vuetify
@@ -408,7 +408,7 @@ Aucune de ces divergences n'est théorique : la panne de police décrite plus ha
 
 ## Schéma de configuration (VJSF)
 
-DataFair utilise [VJSF](https://koumoul-dev.github.io/vuetify-jsonschema-form/) 3+ (la v4 partage le même vocabulaire) pour générer le formulaire de configuration à partir du fichier `public/config-schema.json`. Le fichier source est `src/config/schema.json` et il est traité par `df-build-types` pour générer à la fois les types TypeScript et le schéma résolu copié dans `public/`.
+DataFair utilise [VJSF](https://koumoul-dev.github.io/vuetify-jsonschema-form/) 3+ (la v4 partage le même vocabulaire) pour générer le formulaire de configuration à partir du fichier `public/config-schema.json`. Ce fichier **est** le schéma, écrit à la main ; `df-build-types` s'en sert pour générer les types TypeScript.
 
 > **Note** : `df-build-types` est fourni par le package **`@data-fair/lib-types-builder`** (à installer en `devDependencies`).
 
@@ -418,24 +418,32 @@ La règle complète (majuscule initiale, casse de phrase française, exceptions 
 
 ### Pipeline de build
 
+Le schéma vit là où il est servi. `src/config/schema.ts` n'est qu'un ré-export d'une ligne, présent uniquement pour que `df-build-types` le trouve et en génère les types — pas de copie, pas de fichier dérivé, une seule source de vérité.
+
 ```
-src/config/schema.json          → édité à la main
-         ↓
-    df-build-types
-         ↓
-src/config/.type/               → généré automatiquement
-  ├── index.d.ts                → types TS (importés dans le code)
-  └── resolved-schema.json      → copié vers public/config-schema.json
+public/config-schema.json       → le schéma, édité à la main, servi tel quel à DataFair
+         ↑ ré-exporté par
+src/config/schema.ts            → export { default } from '../../public/config-schema.json' with { type: 'json' }
+         ↓ df-build-types
+src/config/.type/index.d.ts     → types TS, git-ignoré, réexporté par src/config/index.ts
 ```
 
 **Script** (dans `package.json`) :
 ```json
 {
-  "build-types": "df-build-types && cp src/config/.type/resolved-schema.json public/config-schema.json"
+  "build-types": "df-build-types src/config"
 }
 ```
 
-**Commande** : `npm run build-types` (doit être relancée après chaque modification de `schema.json`).
+**Commande** : `npm run build-types` (à relancer après chaque modification du schéma).
+
+C'est le montage des plugins processing — `processing-config-schema.json` à la racine du dépôt, ré-exporté depuis `types/processingConfig/schema.ts`. `df-build-types` cherche récursivement n'importe quel `schema.{json,js,ts}`, le ré-export d'une ligne suffit et les types générés sont identiques.
+
+**Servir le schéma avec ses `$ref`, pas la version déréférencée.** `df-build-types` sait produire `.type/resolved-schema.json`, où chaque `$ref` est remplacé par une copie de sa cible ; c'est ce que toutes les applications du parc sauf `app-catalog` copient encore dans `public/`. json-layout compile un arbre par sous-schéma distinct et résout lui-même les `$ref` internes : déréférencer multiplie donc la compilation, **à chaque montage du formulaire** — page de configuration DataFair comprise. Mesuré sur `app-catalog`, dont les définitions partagées sont référencées jusqu'à 9 fois : 48 ko contre 402 ko, 99 arbres contre 569, ~390 ms contre ~5 100 ms de codegen Ajv, pour un formulaire et un objet de configuration identiques. Le mécanisme est détaillé dans le skill `vjsf`.
+
+Rien ne casse côté DataFair : à l'enregistrement de la base application il résout lui-même les `$ref` locaux (`jsonRefs.resolveRefs(..., { filter: ['local'] })`) avant d'en déduire les `datasetsFilters`.
+
+**L'exception, les fragments de schéma partagés.** Un `$ref` vers un schéma `https://github.com/data-fair/…` n'est pas résolvable au runtime : il faut le faire entrer dans le fichier, mais **une seule fois**, sous `$defs`. C'est le rôle de `makeLocalDefs` et de l'export `localDefsSchemaJson`, pas de `resolvedSchema`. Cet export est cassé jusqu'à `@data-fair/lib-types-builder` 1.14.3 incluse — il écrit le schéma résolu, et lève une `TypeError` si `resolvedSchema` n'est pas exporté en même temps. Tant que le projet n'a pas de version corrigée, une application portant des fragments partagés reste sur `resolvedSchemaJson` et en paie le coût.
 
 ### Vocabulaire, patterns et sélecteurs → skill `vjsf`
 
@@ -506,11 +514,11 @@ Deux patterns selon le besoin :
 
 ```json
 {
-  "x-exports": ["types", "resolvedSchemaJson"]
+  "x-exports": ["types"]
 }
 ```
 
-`resolvedSchemaJson` est obligatoire pour générer le fichier que DataFair va fetcher. `types` génère les définitions TypeScript utilisables dans le code via `@/config/.type/index.js`.
+`types` génère les définitions TypeScript utilisables dans le code via `@/config/.type/index.js`, et c'est le seul export nécessaire : le fichier que DataFair fetch est le schéma lui-même (voir « Pipeline de build »). `x-exports` reste dans le fichier servi — c'est un mot-clé `x-` que json-layout ignore, et l'en retirer remettrait une étape de build entre la source et ce que DataFair lit.
 
 > Voir `snippets/schema-xexports.ts`.
 
@@ -1034,7 +1042,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] `server.warmup.clientFiles` déclaré dans `vite.config.ts`, et la suite e2e verte **serveur froid** (`df-dev-env --force` tire un nouvel `E2E_PORT`, donc un serveur neuf ; ou tuer le serveur entre deux exécutions) — verte serveur chaud ne prouve rien
 - [ ] `npm run type-check` passe (TS strict)
 - [ ] `npm run lint` passe
-- [ ] `public/config-schema.json` est généré et à jour
+- [ ] `npm run build-types` relancé après toute modification du schéma (`src/config/.type/` en dépend)
 - [ ] schéma conforme au skill `vjsf` : aucun `x-*` legacy, `size=50` et `{q}`/`qSearchParam` sur les `getItems` data-fair, `discriminator` sur les `oneOf` de variantes
 - [ ] tous les libellés visibles commencent par une majuscule — `title`, `description`, options d'`enum` / `oneOf`, boutons, empty states, messages d'erreur, **y compris les chaînes en dur dans les templates**
 - [ ] `public/thumbnail.png` est présent
@@ -1067,6 +1075,7 @@ Points clés :
 - VJSF 2 → 3 : mots-clés `x-*` silencieusement ignorés — table de migration dans le skill `vjsf` (`references/migration-v2-to-v3.md`)
 - Axios → `useFetch` (`@data-fair/lib-vue/fetch.js`)
 - `withUiNotif` → `useAsyncAction` (déprécié)
+- Schéma résolu → schéma servi tel quel : déplacer `src/config/schema.json` vers `public/config-schema.json`, le remplacer par un `src/config/schema.ts` d'une ligne, réduire `build-types` à `df-build-types src/config` et passer `x-exports` à `["types"]` (§ « Pipeline de build »). Vérifier la non-régression en comparant, sur de vraies configurations, l'objet produit par le formulaire avant et après — il doit être identique
 
 ## Notes pour les agents
 

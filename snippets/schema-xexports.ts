@@ -2,12 +2,12 @@
 // Schéma VJSF — Génération de types TypeScript (x-exports)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Le schéma source (src/config/schema.json) peut générer automatiquement
-// les types TypeScript utilisés dans le code de l'app.
+// Le schéma (public/config-schema.json) génère automatiquement les types
+// TypeScript utilisés dans le code de l'app.
 
 export default {
-  // Obligatoire pour activer la génération de types
-  'x-exports': ['types', 'resolvedSchemaJson'],
+  // Seul export nécessaire : le fichier servi à DataFair est le schéma lui-même
+  'x-exports': ['types'],
 
   type: 'object',
   // ... le reste du schéma
@@ -21,18 +21,21 @@ export default {
 // Pipeline de build
 // ─────────────────────────────────────────────────────────────────────────────
 
-// 1. Schéma source → édité à la main
-//    src/config/schema.json
+// 1. Le schéma vit là où il est servi, édité à la main, avec ses $defs et $ref
+//    public/config-schema.json
 
-// 2. Génération des types (dans package.json)
-//    "build-types": "df-build-types && ncp src/config/.type/resolved-schema.json public/config-schema.json"
+// 2. Ré-export d'une ligne, uniquement pour que df-build-types le trouve
+//    src/config/schema.ts
+//    export { default } from '../../public/config-schema.json' with { type: 'json' }
 
-// 3. Fichiers générés dans src/config/.type/
+// 3. Génération des types (dans package.json)
+//    "build-types": "df-build-types src/config"
+
+// 4. Fichiers générés dans src/config/.type/ (git-ignorés)
 //    • index.d.ts        → types TypeScript (importés dans le code)
 //    • index.js          → runtime types (si besoin)
-//    • resolved-schema.json → schéma résolu (copié vers public/config-schema.json)
 
-// 4. Utilisation dans le code
+// 5. Utilisation dans le code
 //    import type { _JlResolved } from '@/config/.type/index.js'
 //    export type AnyConfig = _JlResolved
 
@@ -40,8 +43,8 @@ export default {
 // Bonnes pratiques
 // ─────────────────────────────────────────────────────────────────────────────
 
-// • Toujours inclure "resolvedSchemaJson" dans x-exports (génère le fichier
-//   que DataFair va fetcher à runtime)
+// • Servir le schéma avec ses $ref — jamais .type/resolved-schema.json, qui
+//   inline chaque $ref et multiplie ce que json-layout doit compiler, à chaque
+//   montage du formulaire (cf. SKILL.md § Pipeline de build)
 // • Ne jamais modifier manuellement les fichiers dans src/config/.type/
-// • Relancer "npm run build-types" après chaque modification de schema.json
-// • Comitter le schéma source ET le resolved-schema.json généré
+// • Relancer "npm run build-types" après chaque modification du schéma
