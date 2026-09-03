@@ -449,6 +449,16 @@ Rien ne casse côté DataFair : à l'enregistrement de la base application il r�
 
 Tout le générique vit dans le skill `vjsf` et n'est pas dupliqué ici : organisation en onglets (`allOf` + `title`), discrimination de type (`discriminator` + `oneOf` + `const` + `oneOfLayout` — gros point de **performance** sur les grands `oneOf`), sélecteurs dynamiques `getItems` (`url` / `expr`, règle **`size=50`** sur les URLs data-fair dont le défaut est 12, messages de liste vide personnalisés `props.noDataText` / dynamique `getProps`), affichage conditionnel (`layout.if` / `layout.switch`), champs cachés (`layout: "none"`), arrays avancés (`itemTitle` / `itemSubtitle` / `itemCopy` / `getDefaultData` / `messages.addItem`), slider soigné (`label: ""` + `slots.before` + ticks), sélecteur d'icônes MDI (`icons-mdi-latest`, URL **absolue `https://koumoul.com/data-fair/api/v1/…` codée en dur — jamais relative**). Les exemples prêts à copier sont dans `vjsf/references/patterns.md`.
 
+### `x-i18n-*` : inactif dans le formulaire de configuration d'application
+
+Le skill `vjsf` décrit `x-i18n-*` comme actif « dès que l'UI passe `xI18n: true` ». **Le formulaire de configuration d'application de DataFair ne le passe pas** (`ui/src/components/application/application-config.vue` : `vjsfOptions` sans `xI18n`, `locale: 'fr'` en dur), et l'option est opt-in dans `@json-layout/core` (`compile/options.js` : `xI18n: !!partialOptions.xI18n`). Conséquences pour un `config-schema.json` :
+
+- Les surcharges `x-i18n-title` / `x-i18n-description` ne sont **jamais résolues** : le schéma est affiché dans sa langue de base. Écrire le schéma **en français, sans `x-i18n-*`**, comme tout le parc.
+- Une surcharge `{ "en": … }` seule est **nuisible** le jour où l'option serait activée : `resolveXI18n` fait `value[locale] ?? value['en'] ?? base`, donc un utilisateur `fr` recevrait l'anglais à la place du français de base.
+- **Jamais de `x-i18n-*` à l'intérieur de `layout` ni de `oneOfLayout`** (`x-i18n-props`, `x-i18n-messages`, `x-i18n-label`…). Sans résolution préalable, json-layout valide chaque composant avec `unevaluatedProperties: false` et rejette **tout le layout** — « failed to normalize layout, use default component » — silencieusement côté formulaire : un sélecteur de colonne se dégrade en deux champs texte `key` / `label`, une liste de filtres perd son sélecteur de type. Le message n'apparaît que dans la console (« JSON layout encountered some validation errors »).
+
+Test de non-régression peu coûteux : compiler `public/config-schema.json` avec `@json-layout/core` **sans** `xI18n` (les options réelles du formulaire) et échouer sur toute erreur de normalisation.
+
 ### Prérequis dataset déclarés par l'URL du sélecteur
 
 Les paramètres du `getItems.url` (ou de `x-fromUrl`) de la propriété `datasets` ne servent pas qu'au formulaire : à l'enregistrement de la base application, DataFair résout `config-schema.json` et en **déduit les filtres de compatibilité** (`datasetsFilters`) — ex. `bbox=true` (jeux géo), `concepts=https://schema.org/box`. Ces filtres déterminent les jeux proposés à la configuration et les messages « Cette application nécessite… » du catalogue.
@@ -988,7 +998,8 @@ Voir `references/endpoints-datafair.md` pour les endpoints API (utilisés par le
 
 - `size`, `q` (recherche textuelle), `sort`, `finalizedAt` (cache)
 - Filtres : privilégier `*_eq` et `*_in` (ex: `departement_eq=75`) pour les appels REST directs ; dans une URL partagée (état d'app, pages portals), suivre la convention `_c_<concept>` / `_d_<datasetId>_<field>_<op>` (voir `references/filters-url-convention.md`)
-- `qs` : uniquement pour des filtres dynamiques complexes. **Ne plus l'utiliser pour les filtres statiques** — voir la section `staticFilters` ci-dessous.
+- `qs` : uniquement pour des filtres dynamiques complexes. **Ne plus l'utiliser pour les filtres statiques** — voir la section `staticFilters` ci-dessous. Toute clé de champ ou valeur injectée dans `qs` passe par `escape()` de `@data-fair/lib-utils/filters/index.js` : une clé legacy ou `compat-ods` peut contenir espaces et parenthèses, et les guillemets d'une clause voisine ne protègent pas la clause suivante.
+- `thumbnail=<largeur>x<hauteur>` sur `/lines` ne fonctionne que si le dataset porte une colonne au concept **`http://schema.org/image`** exactement (`api/src/datasets/es/commons.ts` : `ctx.imageField` n'est construit que depuis ce concept ; `DigitalDocument` va dans `docField` et la requête répond **400**). Une colonne `http://schema.org/DigitalDocument` s'affiche par son URL brute, sans miniature. Résoudre le champ image par priorité de concept (`image` puis `DigitalDocument`), jamais par ordre du schéma.
 
 ### Filtres statiques prédéfinis (`staticFilters`)
 

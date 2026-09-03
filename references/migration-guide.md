@@ -103,6 +103,8 @@ Voir la section dédiée "HTTP" plus bas pour les détails sur `useFetch`.
 | `v-btn depressed` | `v-btn variant="flat"` |
 | `v-btn text` | `v-btn variant="text"` |
 | `v-app-bar absolute` | `v-app-bar :absolute="true"` |
+| `v-row dense` | `v-row density="compact"` (`dense` est déprécié, le runtime avertit mais `eslint-plugin-vuetify` ne le voit pas) |
+| Classes typographiques Material 2 : `.text-h1`…`.text-h6`, `.text-subtitle-*`, `.text-body-1/2`, `.text-caption`, `.text-overline` | **Plus émises par Vuetify 4** (vérifiable dans le CSS buildé) : elles rendent à la taille par défaut sans erreur. Noms Material 3 : `text-display-*`, `text-headline-*`, `text-title-*`, `text-body-*`, `text-label-*`, avec variantes responsives `text-md-*` |
 | Thème via JS | Thème via CSS variables + `vuetifySessionOptions` |
 
 ## Vue CLI → Vite
