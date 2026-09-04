@@ -31,7 +31,7 @@ Ce skill guide la création et la maintenance d'applications DataFair (visus, ap
 - Vite 8 (bundler **rolldown**, plus Rollup)
 - TypeScript strict
 - `@data-fair/lib-vuetify` **2.x** — c'est la ligne Vuetify 4 (`peerDependencies: { vuetify: "4" }`) ; la 1.x est la ligne Vuetify 3 et n'est pas compatible
-- `@data-fair/lib-vue` **≥ 1.15** (peer de lib-vuetify 2.x) / `@data-fair/lib-utils`
+- `@data-fair/lib-vue` **≥ 1.15** (peer de lib-vuetify 2.x) / `@data-fair/lib-utils` **≥ 1.14** (formateur de valeurs partagé, `format/field.js`)
 
 > Tout ce que ce skill décrit du thème suppose ces versions : les cascade layers `vuetify-*` sont propres à Vuetify 4, le reset CSS de `global.scss` est arrivé en lib-vuetify 2.0.3, et la résolution des quatre thèmes (`default`, `dark`, `hc`, `hc-dark`) en lib-vue 1.14. Sur une reprise, vérifier ces versions avant d'appliquer les conseils de la section thème.
 - Dev server : `df-dev-server` + Zellij layout `.zellij.kdl`, ports générés dans un `.env` par `df-dev-env`
@@ -328,7 +328,7 @@ Utiliser les fichiers du dossier `snippets/` de ce skill :
 > ```
 > - **`legacy: false`** — sans lui, vue-i18n 11 démarre en mode legacy : déprécié, retiré en v12, et un avertissement s'affiche dans la console de dev.
 > - **`fallbackLocale: 'en'`** — le défaut de `fallbackLocale` est la valeur de `locale`, donc *aucun repli*. simple-directory sert six langues (`fr, en, es, pt, it, de`) alors que les blocs `<i18n>` de `lib-vuetify` n'ont que `fr` et `en` : sans repli, une session `de` affiche les clés brutes (`noResult` au lieu de « Aucun résultat »).
-> - **`numberFormats`** — uniquement les pourcentages, cf. « Nombres et pourcentages » plus bas. Rien à déclarer pour les nombres simples : `n(valeur)` nu est déjà un `Intl.NumberFormat` de la locale de session.
+> - **`numberFormats`** — les formats nommés (`decimal`, `percent`…), cf. « Nombres et pourcentages » plus bas. Ne jamais appeler `n(valeur)` nu : seule la clé nommée est mémoïsée.
 > - **Ne jamais écrire `i18n.global.locale.value = ...`** — en mode legacy `i18n.global.locale` est une string, et l'assignation lève `TypeError: Cannot create property 'value' on string`. C'est de toute façon inutile : un changement de langue ou de thème recharge le document (`session.ts`, `watch(() => state.lang, () => goTo(null))`).
 > Voir `snippets/main.ts` pour le bootstrap complet.
 
@@ -707,25 +707,25 @@ et le plus silencieux : ils passent la revue, passent les tests, et ne se voient
 - `(part * 100 / total).toFixed(2) + '%'` produit **toujours** un point décimal et **jamais** l'espace
   insécable que le français impose avant le signe pourcent, quelle que soit la langue.
 
-Les deux cohabitaient dans la même infobulle de `data-fair-sankey` : `31,546` suivi de `45.66%`, en
-français. `data-fair-sunburst` portait le second.
+Les deux peuvent cohabiter dans une même infobulle : `31,546` suivi de `45.66%`, en français.
 
 **Ce qu'il y a à déclarer, et ce qu'il n'y a pas à déclarer.** `Intl` fait déjà l'essentiel :
 
 | Besoin | Déclaration |
 |---|---|
-| Nombre simple, **groupé par trois** | **Aucune.** `useGrouping` vaut déjà `auto`, `n(v)` rend `31 546` (espace fine insécable U+202F en français) |
-| Décimales d'un nombre simple | Aucune — trois chiffres maximum par défaut |
+| Nombre simple, **groupé par trois** | Un format nommé `decimal`, ou `valeur.toLocaleString(locale)` **sans option** — jamais `n(v)` nu ni `n(v, { options })`, voir « Coût » ci-dessous. `useGrouping` vaut déjà `auto` : `31 546` (espace fine insécable U+202F en français) |
+| Décimales d'un nombre simple | Dans le format nommé (`maximumFractionDigits`), trois par défaut |
 | **Pourcentage** | **Nécessaire** : `style: 'percent'` seul rend `maximumFractionDigits: 0`, donc `46 %` au lieu de `45,7 %` |
 
-D'où deux entrées seulement, posées **directement dans `createI18n`** — pas de module utilitaire, il
-n'y a rien à partager entre fichiers :
+D'où quelques entrées seulement, posées **directement dans `createI18n`** — pas de module utilitaire,
+il n'y a rien à partager entre fichiers :
 
 ```ts
 // les options sont indépendantes de la locale : Intl en déduit les séparateurs, la
 // marque décimale et l'espace que le français met avant le signe pourcent, donc le
 // même jeu est enregistré pour toutes les langues
-const percentFormats = {
+const numberFormats = {
+  decimal: { maximumFractionDigits: 2 },
   percent: { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 },
   percentPrecise: { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }
 } as const
@@ -733,9 +733,17 @@ const i18n = createI18n({
   legacy: false,
   locale: session.lang.value,
   fallbackLocale: 'en',
-  numberFormats: { fr: percentFormats, en: percentFormats }
+  numberFormats: { fr: numberFormats, en: numberFormats }
 })
 ```
+
+**Coût : seule la clé nommée est mémoïsée.** vue-i18n ne met en cache que le formatter d'un format
+nommé ; `n(v)` nu et `n(v, { maximumFractionDigits: 2 })` construisent un `Intl.NumberFormat` à
+chaque appel — 40× plus lent (42 k contre 1 300 k appels/s mesurés), ce qui se voit dans une boucle de
+rendu SVG. Donc `n(v, 'decimal')`, `n(count, 'integer')` si un format à zéro décimale est déclaré, ou
+`v.toLocaleString(locale)` sans second argument (le plus rapide, la locale ne coûte rien). Une valeur
+de colonne d'un jeu de données passe par `formatFieldValue` (section « Formatage des valeurs »), qui
+fait déjà ce choix.
 
 #### ⚠️ Un bloc `<i18n>` local casse `n(v, 'percent')` — prendre `n` en portée globale
 
@@ -761,9 +769,9 @@ const { t } = useI18n()                        // messages du bloc <i18n> local
 const { n } = useI18n({ useScope: 'global' })  // numberFormats de createI18n
 ```
 
-Deux appels à `useI18n()` dans le même `setup()` sont légitimes. Vérifié sur `data-fair-sunburst` et
-`data-fair-sankey` (35 et 27 tests e2e verts, y compris celui qui asserte un rendu français sous
-`navigator.language = en-US`, et plus un seul `[intlify]` dans la console). Ne **pas** tenter de
+Deux appels à `useI18n()` dans le même `setup()` sont légitimes (vérifié par des tests e2e qui
+assertent un rendu français sous `navigator.language = en-US`, sans plus un seul `[intlify]` dans la
+console). Ne **pas** tenter de
 déclarer les `numberFormats` dans le bloc `<i18n>` du SFC : `@intlify/unplugin-vue-i18n` compile son
 contenu en `messages`, pas en formats.
 
@@ -1005,7 +1013,7 @@ Voir `references/endpoints-datafair.md` pour les endpoints API (utilisés par le
 | Type de visu | Endpoint | Description |
 |--------------|----------|-------------|
 | Données brutes | `GET /api/v1/datasets/{id}/lines` | Lignes filtrées/triées/paginées |
-| Valeurs distinctes | `GET /api/v1/datasets/{id}/values_labels` | Valeurs + labels (pour filtres, axes) |
+| Valeurs distinctes | `GET /api/v1/datasets/{id}/values-labels/{field}` | `{ value, label }` d'une colonne (sélecteurs de valeurs) ; `values` renvoie les valeurs brutes |
 | Agrégations groupées | `GET /api/v1/datasets/{id}/values_agg` | Agrégation par champ (`groupBy`) |
 | Métrique simple | `GET /api/v1/datasets/{id}/metric_agg` | Une métrique sur un champ |
 | Bornes géo | `GET /api/v1/datasets/{id}/geo_agg` | Tuiles ou bounds géographiques |
@@ -1016,6 +1024,47 @@ Voir `references/endpoints-datafair.md` pour les endpoints API (utilisés par le
 - Filtres : privilégier `*_eq` et `*_in` (ex: `departement_eq=75`) pour les appels REST directs ; dans une URL partagée (état d'app, pages portals), suivre la convention `_c_<concept>` / `_d_<datasetId>_<field>_<op>` (voir `references/filters-url-convention.md`)
 - `qs` : uniquement pour des filtres dynamiques complexes. **Ne plus l'utiliser pour les filtres statiques** — voir la section `staticFilters` ci-dessous. Toute clé de champ ou valeur injectée dans `qs` passe par `escape()` de `@data-fair/lib-utils/filters/index.js` : une clé legacy ou `compat-ods` peut contenir espaces et parenthèses, et les guillemets d'une clause voisine ne protègent pas la clause suivante.
 - `thumbnail=<largeur>x<hauteur>` sur `/lines` ne fonctionne que si le dataset porte une colonne au concept **`http://schema.org/image`** exactement (`api/src/datasets/es/commons.ts` : `ctx.imageField` n'est construit que depuis ce concept ; `DigitalDocument` va dans `docField` et la requête répond **400**). Une colonne `http://schema.org/DigitalDocument` s'affiche par son URL brute, sans miniature. Résoudre le champ image par priorité de concept (`image` puis `DigitalDocument`), jamais par ordre du schéma.
+
+### Formatage des valeurs d'une colonne
+
+`/lines`, `values_agg`, `words_agg` et `values` renvoient **toujours la valeur brute** : le code d'une
+colonne à `x-labels` (`A`, pas `Actif`), le booléen, le nombre non groupé, la date ISO avec son
+décalage. Le libellé est une métadonnée de présentation portée par le schéma
+(`window.APPLICATION.configuration.datasets[].schema`, aucun appel supplémentaire). Le formatage est
+donc un travail de l'application, et il est **centralisé dans la lib** :
+
+```ts
+import { formatFieldValue, formatFieldValues } from '@data-fair/lib-utils/format/field.js'
+
+const { locale } = useI18n()
+const label = formatFieldValue(fields[key], raw, { locale: locale.value })   // une chaîne
+const items = formatFieldValues(fields[key], raw, { locale: locale.value })  // colonne à `separator` : une entrée par valeur
+```
+
+`formatFieldValue` rend, dans cet ordre : vide → `''` ; coercition d'une chaîne `'true'` / `'1234'`
+selon `field.type` (clé de bucket, paramètre d'URL) ; libellé `x-labels` (repli sur la valeur brute) ;
+nom de fichier d'un attachement, hostname d'une page web (concepts) ; date `DD/MM/YYYY` et date-heure
+`DD/MM/YYYY, HH[h]mm` sur `field.format`, **dans le fuseau porté par la valeur** ; Oui/Non (Yes/No) ;
+nombre groupé par `toLocaleString(locale)`. `formatField(item, field)` est la forme historique sur une
+ligne entière. Ne pas réécrire un lookup `x-labels` maison, ni un `dayjs(value).format()` nu (il
+rendrait dans le fuseau du navigateur).
+
+- **Afficher le libellé, jamais la valeur brute**, partout où la valeur est visible : axes, légendes,
+  infobulles, cartes, récapitulatifs, textes de partage, `aria-label`.
+- **Conserver la valeur brute** partout où elle sert de clé, d'identité, de valeur de filtre, ou
+  repart vers l'URL ou l'API (`_in`, `_eq`, `qs`). Le couple `{ raw, formatted }` est la bonne forme.
+- **Comparer et dédoublonner sur ce qui est affiché** quand la logique porte sur ce que l'utilisateur
+  lit (deux codes distincts au même libellé ne sont qu'un choix).
+- Une saisie libre de l'utilisateur (jeu, recherche) accepte **le libellé ou la valeur brute** et rend
+  le libellé.
+- **Un util pur ou un composable ne lit pas i18n** : lui passer un callback `(raw) => string`
+  construit dans le composant, ou la locale en paramètre. Un `createXxx()` appelé dans `main.ts`
+  n'est pas un contexte de composant.
+- **Une année groupée en `2 011`** n'est pas un bug de code : il manque le concept **Année**
+  (`https://www.w3.org/TR/owl-time/#time:year`) sur la colonne, qui la force en `string` côté
+  data-fair. Correctif de donnée, pas d'exception dans la lib.
+- Ne pas confondre avec `label` / `title` de la colonne, qui nomment la colonne elle-même, ni avec
+  les concepts.
 
 ### Filtres statiques prédéfinis (`staticFilters`)
 
