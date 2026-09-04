@@ -459,6 +459,10 @@ Le skill `vjsf` décrit `x-i18n-*` comme actif « dès que l'UI passe `xI18n: tr
 
 Test de non-régression peu coûteux : compiler `public/config-schema.json` avec `@json-layout/core` **sans** `xI18n` (les options réelles du formulaire) et échouer sur toute erreur de normalisation.
 
+### Champs courts côte à côte
+
+Un formulaire de configuration est rendu dans une colonne étroite (page de configuration DataFair, dev-server). Une suite de champs **courts** — entiers (`nombre d'éléments`, `nombre de choix`), booléens, petites listes — empilés chacun sur une ligne pleine largeur gaspille la hauteur et allonge le défilement. Les poser **deux par ligne** avec `layout: { cols: { xs: 12, sm: 6 } }` (pleine largeur sur mobile, moitié dès `sm`). Garder la pleine largeur pour les sélecteurs de colonne, les textes longs, les listes et les objets composés. Le mot-clé et ses valeurs sont dans le skill `vjsf` (`cols`, 0–12 ou `{ xs, sm, md, lg, xl }`).
+
 ### Prérequis dataset déclarés par l'URL du sélecteur
 
 Les paramètres du `getItems.url` (ou de `x-fromUrl`) de la propriété `datasets` ne servent pas qu'au formulaire : à l'enregistrement de la base application, DataFair résout `config-schema.json` et en **déduit les filtres de compatibilité** (`datasetsFilters`) — ex. `bbox=true` (jeux géo), `concepts=https://schema.org/box`. Ces filtres déterminent les jeux proposés à la configuration et les messages « Cette application nécessite… » du catalogue.
