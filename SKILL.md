@@ -459,6 +459,18 @@ Le skill `vjsf` décrit `x-i18n-*` comme actif « dès que l'UI passe `xI18n: tr
 
 Test de non-régression peu coûteux : compiler `public/config-schema.json` avec `@json-layout/core` **sans** `xI18n` (les options réelles du formulaire) et échouer sur toute erreur de normalisation.
 
+### Pièces jointes : trois sources, trois URLs
+
+Un fichier affiché par une application (image de fond, logo, illustration d'une fiche) vient d'une **pièce jointe**, jamais d'une URL libre, et il en existe trois sortes qu'il ne faut pas confondre :
+
+| Source | Où la choisir dans le formulaire | URL à l'exécution |
+|---|---|---|
+| Pièce jointe du **jeu de données** (métadonnées) | `getItems.expr` sur `rootData.datasets?.[0]?.attachments` | `{dataset.href}/metadata-attachments/{name}` |
+| Pièce jointe de **l'application** (onglet « Pièces jointes » de sa configuration) | `getItems: { expr: "context.attachments", itemKey: "data.name", itemTitle: "data.title" }` — `context.attachments` est fourni par DataFair au formulaire | `{application.href}/attachments/{name}` |
+| Pièce jointe de **ligne** (colonne au concept `DigitalDocument`) | c'est une colonne, pas un choix de fichier : sélecteur de champ | colonne calculée `_attachment_url` (à demander dans `select`) |
+
+Le choix des sources à proposer dépend de l'application : une image de présentation vient du jeu de données ou de l'application ; une image par ligne (fiche, vignette) vient de la ligne. Une configuration ancienne portant `{ name }` sans indication de source désigne en général une pièce jointe du jeu de données.
+
 ### Champs courts côte à côte
 
 Un formulaire de configuration est rendu dans une colonne étroite (page de configuration DataFair, dev-server). Une suite de champs **courts** — entiers (`nombre d'éléments`, `nombre de choix`), booléens, petites listes — empilés chacun sur une ligne pleine largeur gaspille la hauteur et allonge le défilement. Les poser **deux par ligne** avec `layout: { cols: { xs: 12, sm: 6 } }` (pleine largeur sur mobile, moitié dès `sm`). Garder la pleine largeur pour les sélecteurs de colonne, les textes longs, les listes et les objets composés. Le mot-clé et ses valeurs sont dans le skill `vjsf` (`cols`, 0–12 ou `{ xs, sm, md, lg, xl }`).
