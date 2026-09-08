@@ -483,6 +483,16 @@ Les paramètres du `getItems.url` (ou de `x-fromUrl`) de la propriété `dataset
 - Les placeholders `${...}` (ex. `${context.datasetFilter}`) sont ignorés par l'extraction.
 - La meta `vocabulary-require` des apps legacy n'est **plus lue** (aucune occurrence dans le code) : la supprimer lors des migrations et reporter l'exigence dans l'URL du sélecteur.
 
+### Sélecteur de jeux de données : pas de `sort` explicite
+
+L'URL `getItems` du sélecteur `datasets` ne porte **pas** de paramètre `sort`. DataFair choisit déjà le bon tri : date de création décroissante quand il n'y a pas de recherche textuelle, pertinence dès qu'il y en a une — `findUtils.sort(reqQuery.sort || (!reqQuery.q && '-createdAt') || '', reqQuery.q)` (`api/src/datasets/service.ts`).
+
+Un `sort` explicite casse le second cas : le score de pertinence est **ajouté après** les clés de tri reçues (`if (q) sort._score = { $meta: 'textScore' }`, `api/src/misc/utils/find.ts`) et Mongo applique les clés dans leur ordre d'insertion. Avec `sort=createdAt:-1`, le tri vaut `{ createdAt: -1, _score }` : la pertinence ne sert plus que de départage, ajouter des mots à la recherche ne remonte pas les jeux attendus, et une `size` réduite empêche de compenser en faisant défiler.
+
+La même mécanique vaut pour un sélecteur alimenté par `/lines` (ElasticSearch) : `esQuery.sort.push('_score')` n'intervient qu'**après** les clés reçues (`api/src/datasets/es/commons.ts`). Aucun sélecteur piloté par une recherche textuelle ne porte de `sort`, quel que soit l'endpoint interrogé.
+
+Le tri par date de création n'est donc pas à défendre par un paramètre : c'est déjà le défaut, et le laisser implicite garde la recherche utilisable. Erreur très répandue dans le parc (29 applications sur 37 au 2026-09-08, souvent sur plusieurs sélecteurs du même schéma) — c'est un défaut à corriger à la reprise, pas une convention.
+
 ### Schémas de couleur
 
 Deux patterns selon le besoin :
