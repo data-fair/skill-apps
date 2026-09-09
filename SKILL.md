@@ -124,6 +124,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 ### Fichiers publics obligatoires
 
 - `public/config-schema.json` : le schéma de configuration lui-même, écrit à la main — DataFair le fetch pour construire le formulaire de config. **Ne jamais renommer ni déplacer**.
+- `public/favicon.svg` : le « K » Koumoul, copié tel quel depuis le jeu de logos officiel (dépôt `communication`, `logos/svg/logo-square.svg`) — une seule source à maintenir pour tout le parc. Vectoriel, ~1 ko, net à toutes les tailles. **Ne pas embarquer de `favicon.ico`** : le conteneur ICO ne sert qu'à empaqueter plusieurs tailles, et celui que traînent les vieilles applications pèse 159 ko pour une unique image 196×196, publiée pour rien. Le `<link rel="icon">` de l'`index.html` est obligatoire : sans lui le navigateur retombe sur `/favicon.ico`, qui n'existe plus.
 - `public/thumbnail.png` : Miniature pour la galerie d'applications. C'est la **présence du fichier à la racine** qui compte, et elle seule : `baseApp.image` est calculé en dur — `baseApp.url + 'thumbnail.png'` (`base-applications/operations.ts`). La meta `thumbnail` n'a aucun consommateur, ne pas la déclarer. `%PUBLIC_URL%` n'est substitué par aucun outil, ne pas l'utiliser non plus.
 
 ### index.html — document complet
@@ -134,6 +135,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
     <style>@layer vuetify-core, vuetify-components, vuetify-overrides, vuetify-utilities, vuetify-final;</style>
     <link href="/simple-directory/api/sites/_theme.css" rel="stylesheet">
@@ -160,7 +162,7 @@ Elle doit être propagée aux embeds d-frame pour maintenir les droits d'accès.
 </html>
 ```
 
-Six points de ce squelette ne se devinent pas :
+Ces points du squelette ne se devinent pas :
 
 - **`<!DOCTYPE html>` obligatoire en première ligne** (critère RGAA 8.1). Il garantit le mode de rendu standard du navigateur (évite le mode Quirks) et doit figurer tout en haut avant tout commentaire ou balise.
 - **Pas d'attribut `lang` sur `<html>`.** Le proxy filtre l'attribut déclaré puis le repose depuis la locale de la requête (`api/src/applications/proxy.ts`). Conserver le commentaire : sans lui, un agent qui régénère le fichier remettra `lang="fr"`, que tous les linters HTML réclament. **Limite connue** : le `lang` du document et la locale de l'interface sont résolus indépendamment et peuvent diverger — voir `references/accessibility-rgaa.md`. Rien à corriger côté application.
@@ -168,6 +170,7 @@ Six points de ce squelette ne se devinent pas :
 - **Un seul `<title>` et une seule `<meta name="description">`.** Les dupliquer avec un attribut `lang` pour porter l'i18n est invalide en HTML et produit deux erreurs W3C. L'i18n du catalogue passera par registry, qui porte `title` et `description` en objets `{ en, fr }`.
 - **Le `<link>` vers `_theme.css` et la déclaration `@layer`.** `/simple-directory/api/sites/_theme.css` apporte ce que `vuetifySessionOptions` ne calcule pas : les variantes de couleurs **texte à contraste corrigé** (`.text-primary`, `.text-secondary`, ... en `!important`, distinctes des couleurs brutes du thème), les couleurs de `a.simple-link` selon le thème et le fond, les `@font-face` du site et une règle `@media print`. Le chemin est absolu et sans hash : les placeholders `{SITE_PATH}` / `{THEME_CSS_HASH}` qu'utilisent les services relèvent de `serve-spa`, et le proxy data-fair ne substitue que `%APPLICATION%` — sans hash le CSS est simplement revalidé toutes les 60 s au lieu d'être mis en cache immuable, les deux routes existent côté simple-directory. La déclaration `@layer` vient avant tout style parce que Vuetify 4 livre son CSS dans des couches en cascade (`vuetify-core`, `vuetify-components`, `vuetify-final`...) : avec `@layer`, la priorité est fixée par l'**ordre de première déclaration des noms**, pas par l'ordre des règles. Sans cette ligne, cet ordre dépend du chunk CSS qui se charge en premier — instable entre le dev et le build à cause du code splitting, donc une surcharge qui fonctionne en local peut cesser de fonctionner en production. La déclarer en tête épingle l'ordre et ouvre `vuetify-overrides` / `vuetify-utilities` comme emplacements pour vos propres styles. `_theme.css`, lui, est volontairement hors couche : du CSS non layered l'emporte sur tout CSS layered, quel que soit l'ordre.
 - **Le `<script>` vers `_public.js`.** `/simple-directory/api/sites/_public.js` pose `window.__PUBLIC_SITE_INFO`, que la session lit sans requête. Sans lui, `createSession({ siteInfo: true })` retombe sur `refreshSiteInfo`, que la lib marque comme déprécié, et paie un fetch bloquant avant le premier rendu. C'est un `<script>` classique dans le `<head>`, donc exécuté avant le module `main.ts`, qui est différé : le global est garanti posé au moment où `createSession` le teste. Chemin absolu et sans hash, comme `_theme.css`.
+- **Le `<link rel="icon">` vers `/favicon.svg`.** Il doit être déclaré explicitement : sans lui le navigateur demande `/favicon.ico`, qui n'est plus livré. Chemin root-relative, réécrit par Vite en `base + favicon.svg` au build (pas en dev).
 - **`<div id="app">` avec `<v-main>` (ou `<main id="app">` sans Vuetify)** : Dans une application Vuetify standard, le composant `<v-main>` dans `App.vue` rend déjà nativement un élément `<main class="v-main">` dans le DOM. Si `index.html` utilisait `<main id="app">`, le DOM contiendrait deux balises `<main>` imbriquées, ce qui est invalide (violation `landmark-main-is-top-level` / `landmark-no-duplicate-main`). Si l'application utilise `<v-main>`, `index.html` doit donc avoir `<div id="app">`. Si l'application n'utilise pas Vuetify ou pas de `<v-main>`, alors `index.html` doit porter `<main id="app">` pour fournir le repère principal requis (RGAA 9.2, 12.6).
 
 #### `<title>` et `meta name="title"` : deux choses différentes
@@ -1132,6 +1135,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] schéma conforme au skill `vjsf` : aucun `x-*` legacy, `size=50` et `{q}`/`qSearchParam` sur les `getItems` data-fair, `discriminator` sur les `oneOf` de variantes
 - [ ] tous les libellés visibles commencent par une majuscule — `title`, `description`, options d'`enum` / `oneOf`, boutons, empty states, messages d'erreur, **y compris les chaînes en dur dans les templates**
 - [ ] `public/thumbnail.png` est présent
+- [ ] `public/favicon.svg` est présent, aucun `public/favicon.ico` ne subsiste, et `index.html` déclare `<link rel="icon" href="/favicon.svg" type="image/svg+xml">`
 - [ ] `index.html` : `<!DOCTYPE html>` obligatoire, pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>` lisible, une seule `<meta name="description">`, `<div id="app">` (si `<v-main>`) ou `<main id="app">`, `<link>` vers `_theme.css` et déclaration `@layer`
 - [ ] `<script src="/simple-directory/api/sites/_public.js">` présent **et** `main.ts` en `siteInfo: !window.__PUBLIC_SITE_INFO` — les deux, jamais l'un sans l'autre. Contrôle : lancer les e2e et grepper `refreshSiteInfo is deprecated` dans la sortie ; un seul hit signifie que la session paie encore le fetch bloquant. Attention au faux négatif inverse : un mock qui répond du JSON à tout `**/simple-directory/**` sert du JSON pour `_public.js` aussi, le global reste vide et l'app repasse en silence par le chemin déprécié alors que le code est bon
 - [ ] aucun avertissement `[intlify]` en console pendant les e2e (cf. « Un bloc `<i18n>` local casse `n(v, 'percent')` »)
