@@ -229,6 +229,35 @@ Ne pas conserver de dépendance à `iframe-resizer` dans le code de l'app : la m
 
 Les apps legacy portent souvent des mots-clés vjsf 2 (`x-display`, `x-fromUrl`, `x-itemsProp`, `x-itemTitle`, `x-itemKey`, `x-if`) dans leur `config-schema.json` : ils sont **silencieusement ignorés** par VJSF 3+ (onglets aplatis, sélecteurs dégradés en champs texte, sans aucune erreur). Suivre la table de migration du skill `vjsf` (`references/migration-v2-to-v3.md`), poser `<meta name="df:vjsf" content="3">` dans `index.html`, puis relancer `npm run build-types`.
 
+## maplibre-gl 5 → 6
+
+Montée obligatoire : l'avis **GHSA-jrc7-96c5-q579** (XSS dans `DOM.sanitize()`, critique) couvre tout `<= 6.4.0`, donc toute la branche 5. `npm audit --omit=dev --audit-level=critical` bloque le `pre-push` tant qu'elle n'est pas faite. Le correctif est `6.8.0`.
+
+L'API utilisée par les applications ne bouge pas — `Map`, `Marker`, `NavigationControl`, `AttributionControl`, `LngLatBounds`, `transformRequest` passent tels quels, sans adaptation de code. **Un seul point casse, et il casse en silence** : maplibre 6 livre son worker comme module séparé et en construit l'URL d'une façon qu'aucun bundler ne résout. Le `new Worker()` tombe sur un 404, le style ne termine jamais son chargement, et la carte reste au fond du style — vide.
+
+Le correctif, importé une fois avant la création de la première carte :
+
+```ts
+// src/utils/maplibre-worker.ts
+import { setWorkerUrl } from 'maplibre-gl'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+
+setWorkerUrl(workerUrl)
+```
+
+Le suffixe `?worker&url` de Vite bundle le worker **avec ses propres dépendances** (`maplibre-gl-shared.mjs`) et rend l'URL de l'asset émis ; `setWorkerUrl()` est exposé par maplibre 6. Contrôle : `dist/assets/` doit contenir un `maplibre-gl-worker-*.js` après `npm run build`.
+
+**Pourquoi la panne est silencieuse, et comment la reconnaître.** maplibre ne journalise pas ce genre d'échec dans la console : il l'émet sur l'événement `error` de la carte — et une application qui pose un écouteur `error` (motif courant, pour qu'un tileserver injoignable ne coûte pas la session à l'utilisateur) le neutralise. Symptômes : aucune erreur console, canvas bien créé, contexte WebGL valide, fond du style peint, aucune donnée dessinée. La signature à interroger :
+
+```js
+map.isStyleLoaded()   // false, bloqué
+map.isSourceLoaded('<source du style>')  // false
+```
+
+**Aucune suite de tests du parc n'attrape cette régression** : les tests e2e vérifient les contrôles, les marqueurs, les interactions — jamais qu'une tuile est réellement dessinée. Une montée de maplibre exige donc un **contrôle visuel**, et il vaut d'ajouter aux applications cartographiques une assertion sur `isStyleLoaded()` / `isSourceLoaded()` une fois la carte chargée.
+
+**Taille des contrôles.** maplibre livre des boutons de zoom de 29 px, au-dessus du minimum de 24 px de WCAG 2.2 AA (2.5.8) et en dessous des 44 px du niveau AAA. RGAA 4.1 n'a pas de critère de taille de cible : les laisser tels quels est conforme, les remonter à 44 px est un choix de confort tactile. Si l'application les surcharge, la règle doit vivre **hors de tout cascade layer** — la feuille de style de maplibre n'est pas layerée et gagnerait sinon.
+
 ## Checklist de migration
 
 > **⚠️ Ne jamais modifier le numéro de version** : conserver la valeur exacte du champ `"version"` du `package.json` existant. Ne pas la bumper vers 1.0.0 ou autre version sous prétexte qu'il s'agit d'une refonte majeure.

@@ -1159,6 +1159,7 @@ Points clés :
 - Vuetify 2 → Vuetify 4 : `vite-plugin-vuetify`, nouveaux props (`variant="flat"`)
 - Vue CLI → Vite : `vite.config.ts`, `VITE_*` env vars
 - VJSF 2 → 3 : mots-clés `x-*` silencieusement ignorés — table de migration dans le skill `vjsf` (`references/migration-v2-to-v3.md`)
+- maplibre-gl 5 → 6 : montée imposée par un avis critique, API inchangée, mais le worker de maplibre 6 doit être câblé à la main (`setWorkerUrl` + `?worker&url`) sinon la carte reste vide **sans aucune erreur** — détail et diagnostic dans `references/migration-guide.md`
 - Axios → `useFetch` (`@data-fair/lib-vue/fetch.js`)
 - `withUiNotif` → `useAsyncAction` (déprécié)
 - Schéma résolu → schéma servi tel quel : déplacer `src/config/schema.json` vers `public/config-schema.json`, le remplacer par un `src/config/schema.ts` d'une ligne, réduire `build-types` à `df-build-types src/config` et passer `x-exports` à `["types"]` (§ « Pipeline de build »). Vérifier la non-régression en comparant, sur de vraies configurations, l'objet produit par le formulaire avant et après — il doit être identique
