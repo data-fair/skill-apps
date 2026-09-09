@@ -299,6 +299,8 @@ const isUnitOnly = selectedProjects.length > 0 && selectedProjects.every(p => p 
 export default defineConfig({
   testMatch: /.*\.spec\.ts$/,
   forbidOnly: !!process.env.CI,
+  // no per-project workers in Playwright: the browser suite runs alone, the unit project keeps the default pool
+  workers: isUnitOnly ? undefined : 1,
   outputDir: './tests/output',
   use: { baseURL: BASE_URL },
   projects: [
@@ -315,6 +317,12 @@ export default defineConfig({
       }
 })
 ```
+
+**Un seul worker pour l'e2e**, et le pool par défaut pour les tests unitaires. `workers` est global à la config — il n'existe pas de réglage par projet — donc le conditionner sur le même `isUnitOnly` que le `webServer`. Sans réglage, Playwright en ouvre la moitié des cœurs.
+
+Un worker est un navigateur. La suite est bien plus rapide à plusieurs (mesuré sur une application de 146 tests, 8 cœurs : 2 min 44 à 1 worker, 2 min 11 à 2, ~1 min 20 à 4), mais une machine de développement est rarement au repos — dev-servers, `vue-tsc`, elasticsearch, autres sessions — et sous contention les tests dépassent leur timeout sans rien dire du code : le bouton attendu n'apparaît pas en 30 secondes. Un même run échoue alors sur un test différent à chaque fois, signature à reconnaître. Comme la suite tourne au `pre-push`, ce faux échec bloque une publication et coûte bien plus que la minute gagnée ; sur une machine chargée, la série est même souvent plus rapide que le parallèle. Le projet `unit` ne lance aucun navigateur et garde le pool par défaut.
+
+Le plafond ne vise donc que la machine de développement et le hook `pre-push`. En CI, c'est le projet `unit` qui a vocation à tourner — léger, sans navigateur ni serveur Vite ; l'e2e reste local, là où la contention est précisément la règle.
 
 ```json
 {
