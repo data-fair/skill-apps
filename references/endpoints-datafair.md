@@ -77,14 +77,27 @@ const { data } = useFetch(
 Pour les graphiques avec regroupement : bar charts, pie charts, line charts, treemaps, etc.
 
 **Paramètres** :
-- `field` ou `groupBy` : champ de regroupement (obligatoire)
+- `field` : champ de regroupement (obligatoire)
 - `metric` : type d'agrégation (`sum`, `avg`, `min`, `max`, `count`)
-- `metricField` : champ sur lequel calculer la métrique (si `metric` ≠ `count`)
-- `size` : nombre de groupes (max 1000)
+- `metric_field` : champ sur lequel calculer la métrique (si `metric` ≠ `count`)
+- `agg_size` : nombre de groupes (max 1000, 20 par défaut)
+- `size` : nombre de lignes brutes renvoyées dans `results` par groupe (mettre `0` quand seule l'agrégation compte)
+- `interval` : pour un champ date ou nombre, pas de regroupement (`value`, `year`, `month`, `day`, ou un nombre)
 - `*_eq` / `*_in` : filtres préalables
-- `sort` : tri des résultats, liste de tokens séparés par virgules parmi `metric`, `-metric`, `count`, `-count`, `key`, `-key`, ou nom de colonne (préfixé `-` pour desc). Ex : `sort: '-metric'`, `sort: 'key'`, `sort: '-count,key'`.
-- `percents` : `true` pour inclure les pourcentages
+- `sort` : tri des groupes parmi `metric`, `-metric`, `_count`, `-_count`, `_key`, `-_key`, ou nom de colonne (préfixé `-` pour desc). Ex : `sort: '-metric'`, `sort: '_key'`.
 - `missing` : label pour les valeurs nulles (ex: `Non renseigné`)
+
+**Plusieurs niveaux de regroupement** : `field`, `agg_size`, `sort`, `interval` et `missing`
+sont des listes parallèles, **une valeur par niveau, séparées par des virgules** —
+`field=annee,secteur&agg_size=100,12&sort=_key,-metric`. La réponse imbrique alors un `aggs`
+dans chaque bucket.
+
+Toujours la virgule, jamais le point-virgule : data-fair accepte encore `;` par
+rétro-compatibilité (`splitRetroCompat`), mais un `;` non encodé dans une URL est un
+délimiteur de paramètres pour certains reverse-proxies (traefik, utilisé chez des clients
+hébergés) qui tronquent la requête au premier `;` — la visu ne reçoit qu'un niveau et plante
+(`Cannot read properties of undefined (reading 'controller')` dans charts). Pour la même
+raison, ne pas construire ces paramètres à la main avec `join(';')` : utiliser `join(',')`.
 
 **Exemples par type de visu** :
 
@@ -96,9 +109,10 @@ useFetch(
     query: computed(() => ({
       field: 'region',
       metric: 'sum',
-      metricField: 'montant',
+      metric_field: 'montant',
       annee_eq: selectedYear.value,
-      size: 20,
+      agg_size: 20,
+      size: 0,
       sort: '-metric'
     }))
   }
@@ -110,10 +124,9 @@ useFetch(
   {
     query: computed(() => ({
       field: 'categorie',
-      metric: 'count',
       status_eq: 'actif',
-      size: 10,
-      percents: true,
+      agg_size: 10,
+      size: 0,
       missing: 'Autre'
     }))
   }
@@ -125,12 +138,13 @@ useFetch(
   {
     query: computed(() => ({
       field: 'date',
-      groupBy: 'date',      // ou 'date.year', 'date.month'
+      interval: 'month',    // ou 'year', 'day', 'value'
       metric: 'sum',
-      metricField: 'valeur',
+      metric_field: 'valeur',
       region_eq: selectedRegion.value,
-      size: 100,
-      sort: 'key'
+      agg_size: 100,
+      size: 0,
+      sort: '_key'
     }))
   }
 )
@@ -265,12 +279,15 @@ const allFilters = computed(() => ({
 
 ```ts
 interface ValuesAggResponse {
-  total: number           // nombre total de groupes
-  results: Array<{
-    value: string         // valeur du champ groupBy
-    metric: number        // valeur agrégée
-    percents?: number     // pourcentage (si percents=true)
-    count?: number        // nombre de lignes dans le groupe
+  total: number           // nombre total de lignes agrégées
+  total_values: number    // nombre de valeurs distinctes du champ
+  total_other: number     // lignes hors des agg_size premiers groupes
+  aggs: Array<{
+    value: string         // valeur du champ de regroupement
+    total: number         // nombre de lignes du groupe
+    metric?: number       // valeur agrégée (si metric + metric_field)
+    results: Array<Record<string, any>>  // `size` lignes brutes du groupe
+    aggs?: ValuesAggResponse['aggs']     // niveau suivant, si plusieurs `field`
   }>
 }
 ```

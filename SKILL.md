@@ -1027,7 +1027,7 @@ Voir `references/endpoints-datafair.md` pour les endpoints API (utilisés par le
 |--------------|----------|-------------|
 | Données brutes | `GET /api/v1/datasets/{id}/lines` | Lignes filtrées/triées/paginées |
 | Valeurs distinctes | `GET /api/v1/datasets/{id}/values-labels/{field}` | `{ value, label }` d'une colonne (sélecteurs de valeurs) ; `values` renvoie les valeurs brutes |
-| Agrégations groupées | `GET /api/v1/datasets/{id}/values_agg` | Agrégation par champ (`groupBy`) |
+| Agrégations groupées | `GET /api/v1/datasets/{id}/values_agg` | Agrégation par champ (`field`), plusieurs niveaux séparés par des virgules |
 | Métrique simple | `GET /api/v1/datasets/{id}/metric_agg` | Une métrique sur un champ |
 | Bornes géo | `GET /api/v1/datasets/{id}/geo_agg` | Tuiles ou bounds géographiques |
 
