@@ -900,6 +900,34 @@ import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-glob
 
 Voir `snippets/main.ts` pour le setup complet et `references/migration-guide.md` section "v-iframe → d-frame" pour ne pas supprimer ce bloc lors d'une migration.
 
+### Fond de l'application : opaque seule, transparent embarquée
+
+`<v-app>` peint le fond `background` du thème. Seule en pleine page, c'est ce qu'il faut (et le thème sombre en dépend : sans ce fond, le texte clair tombe sur le blanc du navigateur ; le service capture charge aussi l'app seule pour la miniature). Embarquée dans une page de portail, une card ou un panneau de dashboard, ce même fond fait un rectangle `background` sur un conteneur `surface`. L'app ne connaît pas la couleur de son hôte : embarquée, elle s'efface et le laisse peindre.
+
+Dans `App.vue`, un booléen posé une fois et la classe utilitaire `bg-transparent` de `@data-fair/lib-vuetify` **≥ 2.5.2** (`style/global.scss` la fournit, le color pack de Vuetify étant désactivé) :
+
+```vue
+<template>
+  <v-app :class="{ 'bg-transparent': embedded }">
+    <v-main :class="{ 'h-screen overflow-hidden': !embedded }">
+      <!-- measured here, not on v-main, which the application wrap stretches to the viewport -->
+      <div
+        :class="{ 'h-100': !embedded }"
+        data-iframe-height
+      >
+        ...
+```
+
+```ts
+// embedded, the app lets its host paint the background
+const embedded = window.self !== window.top
+```
+
+- `window.self !== window.top` détecte **tout** iframe, `<d-frame>` ou non : ne pas conditionner sur `?d-frame=true`, qui n'est qu'une des façons d'embarquer l'app.
+- Un `class="bg-transparent"` **inconditionnel** sur `<v-app>` est une erreur (pleine page blanche) ; sans la classe dans la lib, c'est en plus un no-op silencieux.
+- C'est le seul endroit où toucher au fond de l'app : pas de règle sur `.v-application`, pas de `body { background }`, pas de style inline.
+- Même booléen pour la hauteur : seule, l'app remplit l'écran (`h-screen overflow-hidden`) ; embarquée, elle est aussi haute que son contenu. `data-iframe-height` va sur un wrapper interne et non sur `<v-main>` : `.v-application__wrap` a `min-height: 100vh` et étire `<v-main>` au viewport, donc une iframe en `resize="auto"` mesurée sur `<v-main>` ne rétrécit jamais. Ne pas contourner par `.v-application__wrap { min-height: 0 }`.
+
 ### Communication avec le parent (postMessage)
 
 **Écouter la config en draft** — l'UI DataFair n'émet réellement que **2 formats** (vérifié dans `application-config.vue`) :
@@ -1137,6 +1165,7 @@ const { data } = useFetch(() => datasetUrl + '/lines', { query: params })
 - [ ] `public/thumbnail.png` est présent
 - [ ] `public/favicon.svg` est présent, aucun `public/favicon.ico` ne subsiste, et `index.html` déclare `<link rel="icon" href="/favicon.svg" type="image/svg+xml">`
 - [ ] `index.html` : `<!DOCTYPE html>` obligatoire, pas de `lang` sur `<html>`, `charset` en premier, un seul `<title>` lisible, une seule `<meta name="description">`, `<div id="app">` (si `<v-main>`) ou `<main id="app">`, `<link>` vers `_theme.css` et déclaration `@layer`
+- [ ] `App.vue` : `<v-app :class="{ 'bg-transparent': embedded }">` avec `embedded = window.self !== window.top` — jamais `bg-transparent` inconditionnel, jamais de règle sur `.v-application`
 - [ ] `<script src="/simple-directory/api/sites/_public.js">` présent **et** `main.ts` en `siteInfo: !window.__PUBLIC_SITE_INFO` — les deux, jamais l'un sans l'autre. Contrôle : lancer les e2e et grepper `refreshSiteInfo is deprecated` dans la sortie ; un seul hit signifie que la session paie encore le fetch bloquant. Attention au faux négatif inverse : un mock qui répond du JSON à tout `**/simple-directory/**` sert du JSON pour `_public.js` aussi, le global reste vide et l'app repasse en silence par le chemin déprécié alors que le code est bon
 - [ ] aucun avertissement `[intlify]` en console pendant les e2e (cf. « Un bloc `<i18n>` local casse `n(v, 'percent')` »)
 - [ ] `application-name` = nom du dépôt = nom du paquet, en `[a-z0-9-]`
