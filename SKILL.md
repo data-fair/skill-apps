@@ -1096,7 +1096,7 @@ filtrage complexes, cf. « Paramètres communs »).
 |---|---|---|
 | `in` | inclure des valeurs | `key_in=v1,v2` |
 | `out` | exclure des valeurs | `key_nin=v1,v2` |
-| `interval` | intervalle (bornes incluses) | `key_gte=min` + `key_lte=max` (seules les bornes renseignées sont émises) |
+| `interval` | intervalle (bornes incluses) sur un champ nombre, date ou texte | `key_gte=min` + `key_lte=max` (seules les bornes renseignées sont émises) |
 | `starts` | commence par | `key_starts=prefixe` |
 | `exists` | exclure les valeurs vides / non définies | `key_exists` (valeur `' '`, convention UI DataFair) |
 | `notExists` | restreindre aux valeurs vides / non définies | `key_nexists` (valeur `' '`, convention UI DataFair) |

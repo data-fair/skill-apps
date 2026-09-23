@@ -6,6 +6,12 @@
 // (monorepo data-fair/lib, packages/utils/filters/schema.json) + filtres `starts`,
 // `exists` et `notExists`.
 //
+// `interval` accepte tout champ : nombre, date (`format: date|date-time`) ou texte.
+// Les bornes min/max sont des chaînes suggérées par autocomplete sur les valeurs
+// réelles du dataset (`values-labels` trié, borné par `_gte`/`_lte`) — c'est ce qui
+// rend les dates utilisables sans date-picker dans VJSF, et `filters2params` les
+// transmet telles quelles en `_gte`/`_lte`.
+//
 // À insérer dans les `definitions` du schema.json d'une app, puis référencer :
 //   "staticFilters": { "$ref": "#/definitions/filters" }
 //
@@ -26,7 +32,7 @@ export default {
     layout: {
       comp: 'list',
       messages: {
-        addItem: 'ajouter un filtre'
+        addItem: 'Ajouter un filtre'
       }
     },
     items: {
@@ -81,9 +87,31 @@ export default {
           additionalProperties: false,
           properties: {
             type: { const: 'interval' },
-            field: { $ref: '#/definitions/numericField' },
-            minValue: { type: 'number', title: 'Valeur min', layout: { if: 'parent.data.field' } },
-            maxValue: { type: 'number', title: 'Valeur max', layout: { if: 'parent.data.field' } }
+            field: { $ref: '#/definitions/filterField' },
+            minValue: {
+              type: 'string',
+              title: 'Valeur min',
+              layout: {
+                if: 'parent.data.field',
+                getItems: {
+                  url: '${rootData.datasets?.[0]?.href || \'\'}/values-labels/${parent.data.field?.key || \'\'}?sort=asc&${parent.data.field?.key || \'\'}_gte={q}&stringify=true&size=20',
+                  itemKey: 'data["value"]',
+                  itemTitle: 'data["label"]'
+                }
+              }
+            },
+            maxValue: {
+              type: 'string',
+              title: 'Valeur max',
+              layout: {
+                if: 'parent.data.field',
+                getItems: {
+                  url: '${rootData.datasets?.[0]?.href || \'\'}/values-labels/${parent.data.field?.key || \'\'}?sort=desc&${parent.data.field?.key || \'\'}_lte={q}&stringify=true&size=20',
+                  itemKey: 'data["value"]',
+                  itemTitle: 'data["label"]'
+                }
+              }
+            }
           }
         },
         {
@@ -119,27 +147,13 @@ export default {
     }
   },
 
-  // Sélecteur de champ (n'importe quelle colonne)
+  // Sélecteur de champ (n'importe quelle colonne, y compris dates et textes)
   filterField: {
     type: 'object',
     title: 'Champ',
     layout: {
       getItems: {
         url: '${rootData.datasets?.[0]?.href || \'\'}/schema?calculated=false',
-        itemKey: 'data["key"]',
-        itemTitle: 'data["label"]'
-      }
-    }
-  },
-
-  // Sélecteur de champ numérique (pour `interval`)
-  numericField: {
-    type: 'object',
-    title: 'Champ numérique',
-    description: 'Le champ doit être de type nombre ou entier',
-    layout: {
-      getItems: {
-        url: '${rootData.datasets?.[0]?.href || \'\'}/schema?calculated=false&type=number,integer',
         itemKey: 'data["key"]',
         itemTitle: 'data["label"]'
       }
